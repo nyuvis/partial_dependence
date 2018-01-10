@@ -22,8 +22,13 @@ def plot(df_test,
              local_curves = True, 
              compute_in_chunks = False):
 
-    def pdp(fix, rows, chosen_row):
+    def pdp(dict_data, fix, chosen_row = None):
         #t = time.time()
+        rows = dict_data["changing_rows"]
+        dictLabtoIndex = dict_data['dictLabtoIndex']
+        num_feat = dict_data['num_feat']
+        df_sample = dict_data['df_sample']
+
         num_rows = len(rows)
         new_matrix_f = np.zeros((num_rows,num_samples,num_feat))
         sample_vals = df_sample[fix]
@@ -42,67 +47,123 @@ def plot(df_test,
                 new_matrix_f[depth_index][index_height] = new_r
                 index_height+=1
             depth_index+=1
-        chosen_rowS = []
-        for v in sample_vals:
-            arow = np.copy(chosen_row)
-            arow[dictLabtoIndex[fix]] = v
-            chosen_rowS.append(arow)
-        return new_matrix_f,np.array(chosen_rowS)
 
-    def compute_pred(matrixChangedRows,chosen_rowS):
-        #t = time.time()
-        num_rows= len(matrixChangedRows)
-        pred_matrix = np.zeros((num_rows,num_samples))
-        matrixChangedRows = matrixChangedRows.reshape((num_rows*num_samples, num_feat))
-        ps = model.predict_proba(matrixChangedRows)
-        ps = [x[data_set_pred_index] for x in ps]
-        k = 0
-        for i in range(0,num_rows*num_samples):
-            if i%num_samples ==0:
-                pred_matrix[k] = ps[i:i+num_samples]
-                k+=1
-        chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-        chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-        return pred_matrix, chosen_rowS_Pred
+        if chosen_row is not None:
+            chosen_rowS = []
+            for v in sample_vals:
+                arow = np.copy(chosen_row)
+                arow[dictLabtoIndex[fix]] = v
+                chosen_rowS.append(arow)
+            return new_matrix_f,np.array(chosen_rowS)
+        else:
+            return new_matrix_f
+    def pred_comp_all(dict_data,matrixChangedRows,chosen_rowS = None,compute_in_chunks = False):
 
-    def compute_pred_in_chunks(matrixChangedRows,chosen_rowS):
-        #t = time.time()
-        num_rows= len(matrixChangedRows)
-        pred_matrix = np.zeros((num_rows,num_samples))
-        for i in range(0,num_rows):
-            #if float(i+1)%1000==0:
-                #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
-                #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+        def compute_pred(dict_data,matrixChangedRows,chosen_rowS = None):
+            #t = time.time()
+            num_feat = dict_data['num_feat']
+            data_set_pred_index = dict_data['data_set_pred_index']
 
-            ps = model.predict_proba(matrixChangedRows[i])
+
+            num_rows= len(matrixChangedRows)
+            pred_matrix = np.zeros((num_rows,num_samples))
+            matrixChangedRows = matrixChangedRows.reshape((num_rows*num_samples, num_feat))
+            ps = model.predict_proba(matrixChangedRows)
             ps = [x[data_set_pred_index] for x in ps]
-            pred_matrix[i] = ps
-        chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-        chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-        return pred_matrix, chosen_rowS_Pred
+            k = 0
+            for i in range(0,num_rows*num_samples):
+                if i%num_samples ==0:
+                    pred_matrix[k] = ps[i:i+num_samples]
+                    k+=1
+            if chosen_rowS is not None:
+                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
+                chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
+                return pred_matrix, chosen_rowS_Pred
+            else:
+                return pred_matrix
+
+        def compute_pred_in_chunks(dict_data,matrixChangedRows,chosen_rowS = None):
+            #t = time.time()
+
+            num_feat = dict_data['num_feat']
+            data_set_pred_index = dict_data['data_set_pred_index']
 
 
-    def rmse(curve1, curve2):
-        return np.sqrt(((curve1 - curve2) ** 2).mean())
+            num_rows= len(matrixChangedRows)
+            pred_matrix = np.zeros((num_rows,num_samples))
+            for i in range(0,num_rows):
+                #if float(i+1)%1000==0:
+                    #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
+                    #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
 
-    def lb_keogh(s1,s2,r):
-        LB_sum=0
-        for ind,i in enumerate(s1):
+                ps = model.predict_proba(matrixChangedRows[i])
+                ps = [x[data_set_pred_index] for x in ps]
+                pred_matrix[i] = ps
+            if chosen_rowS is not None:
+                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
+                chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
+                return pred_matrix, chosen_rowS_Pred
+            else:
+                return pred_matrix
+        if compute_in_chunks:
+            preds = compute_pred_in_chunks(important_data,the_matrix)
+        else:
+            preds = compute_pred(important_data,the_matrix)
+        return preds
 
-            lower_bound=min(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
-            upper_bound=max(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
 
-            if i>upper_bound:
-                LB_sum=LB_sum+(i-upper_bound)**2
-            elif i<lower_bound:
-                LB_sum=LB_sum+(i-lower_bound)**2
 
-        return np.sqrt(LB_sum)
 
-    def plotting_prediction_changes(pred_matrix,fix,labels_clust,clust_number,rWarped,allClust,spag = False, pred_spag = None):
+    def plotting_prediction_changes(dict_data, pred_matrix, dist_matrix, fix, 
+        labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None):
+            
+        def b_spline(x,y):
 
+            n_local_points = len(x)
+            t = range(n_local_points)
+            ipl_t = np.linspace(0.0, n_local_points - 1, 100)
+
+            x_tup = si.splrep(t, x, k=3)
+            y_tup = si.splrep(t, y, k=3)
+
+            x_list = list(x_tup)
+            xl = x.tolist()
+            size_seros = len(x_list[1])-len(xl)
+            x_list[1] = xl + np.zeros(size_seros).tolist()
+
+            y_list = list(y_tup)
+            yl = y.tolist()
+            size_seros = len(y_list[1])-len(yl)
+            y_list[1] = yl + np.zeros(size_seros).tolist()
+
+            x_i = si.splev(ipl_t, x_list)
+            y_i = si.splev(ipl_t, y_list)
+            return x_i,y_i
+
+        dictLabtoIndex = dict_data['dictLabtoIndex']
+        original_preds = dict_data['original_preds']
+        changing_rows = dict_data['changing_rows']
+        data_set_pred_index = dict_data['data_set_pred_index']
+        df_sample = dict_data['df_sample']
+        df_features = dict_data['df_features']
+
+
+
+        trasparenza = 1
+        dot_size = 5
+
+        #cmap = plt.get_cmap("gist_rainbow")
+        #cmap = plt.get_cmap("RdYlBu")
+        # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
+
+        colors_10_cluster = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
+                             '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
+
+        colors_10_cluster = colors_10_cluster[1::2]+colors_10_cluster[::2]
+
+       
         featLol = fix
-        original_data_sample = back_to_the_orginal(list(df_sample[fix]),fix,de_norm_bool)
+        original_data_sample = back_to_the_orginal(important_data,list(df_sample[fix]),fix)
         path = "plot_"+featLol
         #path = "plot_"+str(int(time.time()))[-3:]+"_"
         if rWarped>0:
@@ -133,17 +194,13 @@ def plot(df_test,
             if len(all_indexes_in_cluster[i]) == 1:
                 avgRmse = 0
             else:
-                avgRmse = np.round(np.mean(distance_matrix[is_index,js_index]),decimals=3)
+                avgRmse = np.round(np.mean(dist_matrix[is_index,js_index]),decimals=3)
             sizeClust = len(all_indexes_in_cluster[i])
             sizeClusts.append(sizeClust)
             texts1.append("#"+str(i)+" - avg dist: "+str(avgRmse))
             texts2.append("#"+str(i)+" - size: "+str(sizeClust))
         
         
-        colors_10_cluster = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
-        colors_10_cluster = colors_10_cluster[1::2]+colors_10_cluster[::2]
-
-       
 
         the_index_to_use = [x for _,x in sorted(zip(sizeClusts,range(clust_number)),reverse=True)]
 
@@ -175,8 +232,8 @@ def plot(df_test,
         
         for i in range(clust_number):
             if not spag:  
-                x_point = x_array[all_indexes_in_cluster[i],dictLabtoIndex[fix]]
-                x_point = back_to_the_orginal(x_point,fix,de_norm_bool)
+                x_point = changing_rows[all_indexes_in_cluster[i],dictLabtoIndex[fix]]
+                x_point = back_to_the_orginal(important_data,x_point,fix)
                 y_point = original_preds[all_indexes_in_cluster[i]] 
                 plt.scatter(x_point,y_point,c=colors_10_cluster[i],s=dot_size)
 
@@ -199,7 +256,8 @@ def plot(df_test,
         #plt.plot(df_sample[fix],mean_preds,color="red",alpha=1)
         #plt.fill_between(df_sample[fix], mean_preds-std_preds, mean_preds+std_preds,color="green",alpha=0.25)
         #plt.plot(df_sample[fix],chosen_rowS_Pred,color="red",alpha=1)
-        plt.axvline(x=back_to_the_orginal(dfFeatures["mean"][fix],fix,de_norm_bool),color="green",linestyle='--')
+        the_mean_value = back_to_the_orginal(important_data,df_features["mean"][fix],fix)
+        plt.axvline(x=the_mean_value,color="green",linestyle='--')
         plt.axhline(y=thresh,color="red",linestyle='--')
         plt.ylabel("prediction",fontsize=20)
 
@@ -227,32 +285,25 @@ def plot(df_test,
         plt.show()
 
         plt.close("all")
-        
-    def b_spline(x,y):
+    
+    def pdp_local(dict_data,fix, allSamples, chosen_row = None):
 
-        n_local_points = len(x)
-        t = range(n_local_points)
-        ipl_t = np.linspace(0.0, n_local_points - 1, 100)
+        def local_sampling (fix, chosen_row, num_samples):
 
-        x_tup = si.splrep(t, x, k=3)
-        y_tup = si.splrep(t, y, k=3)
+            base_value = chosen_row[dictLabtoIndex[fix]]
+            samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
+            samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
+            samples = samplesLeft+samplesRight
+            divisor = int(num_samples/2+1)
+            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+            return final_samples
 
-        x_list = list(x_tup)
-        xl = x.tolist()
-        size_seros = len(x_list[1])-len(xl)
-        x_list[1] = xl + np.zeros(size_seros).tolist()
-
-        y_list = list(y_tup)
-        yl = y.tolist()
-        size_seros = len(y_list[1])-len(yl)
-        y_list[1] = yl + np.zeros(size_seros).tolist()
-
-        x_i = si.splev(ipl_t, x_list)
-        y_i = si.splev(ipl_t, y_list)
-        return x_i,y_i
-
-    def pdp_local(fix, rows, chosen_row,allSamples):
         #t = time.time()
+
+        dictLabtoIndex = dict_data["dictLabtoIndex"]
+        rows = dict_data["changing_rows"]
+        num_feat = dict_data['num_feat']
+
         num_rows = len(rows)
         #print("changing up",num_rows,"rows")
         new_matrix_f = np.zeros((num_rows,num_samples+1,num_feat))
@@ -275,14 +326,21 @@ def plot(df_test,
                 new_matrix_f[depth_index][index_height] = new_r
                 index_height+=1
             depth_index+=1
-        chosen_rowS = []
-        for v in sample_vals:
-            arow = np.copy(chosen_row)
-            arow[dictLabtoIndex[fix]] = v
-            chosen_rowS.append(arow)
-        return new_matrix_f,np.array(chosen_rowS),allSamples
+        if chosen_row is not None:
+            chosen_rowS = []
+            for v in sample_vals:
+                arow = np.copy(chosen_row)
+                arow[dictLabtoIndex[fix]] = v
+                chosen_rowS.append(arow)
+            return new_matrix_f,np.array(chosen_rowS),allSamples
+        else:
+            return new_matrix_f,allSamples
 
-    def compute_pred_local(matrixChangedRows,chosen_rowS):
+    def compute_pred_local(dict_data,matrixChangedRows,chosen_rowS = None):
+
+        num_feat =dict_data['num_feat']
+        data_set_pred_index = dict_data['data_set_pred_index']
+
         numS = num_samples + 1
         #t = time.time()
         num_rows= len(matrixChangedRows)
@@ -295,21 +353,20 @@ def plot(df_test,
             if i%numS ==0:
                 pred_matrix[k] = ps[i:i+numS]
                 k+=1
-        chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-        chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-        return pred_matrix, chosen_rowS_Pred
+        if chosen_rowS is not None:
+            chosen_rowS_Pred = model.predict_proba(chosen_rowS)
+            chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
+            return pred_matrix, chosen_rowS_Pred
+        else:
+            return pred_matrix
 
 
-    def local_sampling (fix, chosen_row, num_samples):
-        base_value = chosen_row[dictLabtoIndex[fix]]
-        samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
-        samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
-        samples = samplesLeft+samplesRight
-        divisor = int(num_samples/2+1)
-        final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
-        return final_samples
         
-    def back_to_the_orginal(data_this,fix,de_norm):
+    def back_to_the_orginal(dict_data,data_this,fix):
+
+        dictLabtoIndex = dict_data['dictLabtoIndex']
+        de_norm = dict_data['de_norm_bool']
+
         if de_norm:
             integ = dictLabtoIndex[fix]
             data_that = data_this / scale[0][integ] - shift[0][integ]
@@ -317,175 +374,199 @@ def plot(df_test,
             data_that = data_this
         return data_that
 
-    def check_denormalization(scale_check,shift_check):
-        if scale_check is None or shift_check is None:
-            de_norm = False
-        else:
-            de_norm = True
-        return de_norm
-
-    de_norm_bool = check_denormalization(scale,shift)
-
-    if local_curves:
-        originalIndex = int(num_samples/2)
-        howFarIndex = 2
-        
-    ###### intro ######
-    data_set_pred_index = class_array.index(class_focus)
-    lenTest = len(df_test)
-    num_feat = len(df_test.columns)
-    #ylabel = [df_test.columns[-1]]
-    xlabel = list(df_test.columns)
-    x_array = df_test[xlabel].as_matrix()
-    #y_array = df_test[ylabel].as_matrix()
-    #labs = [True if l[0] in [class_array[0]] else False for l in y_array]
-    ###################
-    if de_norm_bool:
-        x_array = (x_array + shift)*scale
-
-    pred = model.predict_proba(x_array)
-    original_preds = np.array([x[data_set_pred_index] for x in pred])
-    #thresh = get_roc_curve(original_preds,labs)["score"]
-    
-
-    dictLabtoIndex = {}
-    i =0
-    for laballa in xlabel:
-        dictLabtoIndex[laballa] = i
-        i+=1
-        
-    dfFeatures = pd.DataFrame(columns=["max","min","mean","sd"],index=xlabel)
-
-    means = []
-    stds = []
-    mins = []
-    maxs = []
-    for laballa in xlabel:
-        THErightIndex = dictLabtoIndex[laballa]
-        if de_norm_bool:
-            vectzi = (list(df_test[laballa])+ shift[0][THErightIndex])*scale[0][THErightIndex]
-        else:
-            vectzi = list(df_test[laballa])
-        mean = np.mean(vectzi)
-        maxim = max(vectzi)
-        minion = min(vectzi)
-        standin = np.std(vectzi)
-        means.append(mean)
-        stds.append(standin)
-        mins.append(minion)
-        maxs.append(maxim)
-    dfFeatures["max"] = maxs
-    dfFeatures["min"] = mins
-    dfFeatures["mean"] = means 
-    dfFeatures["sd"] = stds
-    num_feat = len(xlabel)
-
-    df_sample = pd.DataFrame(columns=xlabel)
-
-    eps = 0.01
-    for laballa in xlabel:
-        lower_bound = dfFeatures["min"][laballa] - eps
-        higher_bound = dfFeatures["max"][laballa] + eps
-        #bound = dfFeatures["mean"][laballa] + 2*dfFeatures["sd"][laballa]
-        df_sample[laballa] = np.linspace(lower_bound,higher_bound ,num_samples)
 
 
 
+    def compute_clusters(dict_data,preds,lb_keogh_bool):
 
+        def rmse(curve1, curve2):
+            return np.sqrt(((curve1 - curve2) ** 2).mean())
 
-    #print ("--> ",i,": ",xlabel[featureIndex])
-    #the_feature = xlabel[featureIndex]
+        def lb_keogh(s1,s2,r):
+            LB_sum=0
+            for ind,i in enumerate(s1):
 
-    #print ("partial dependency for: ", the_feature )
+                lower_bound=min(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
+                upper_bound=max(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
 
-    if lb_keogh_bool:
-        distance_between_2_samples = (df_sample[the_feature][num_samples-1]-df_sample[the_feature][0])/num_samples
-        sugg_r = int(np.ceil(dfFeatures["sd"][the_feature]/10.0/distance_between_2_samples))
-        #print("Suggested r parameter:",sugg_r)
-        #rWarpedUsed = int(input("warp parameter window:"))
-        rWarpedUsed = sugg_r
-        if rWarpedUsed == 0:
-            rWarpedUsed =1
+                if i>upper_bound:
+                    LB_sum=LB_sum+(i-upper_bound)**2
+                elif i<lower_bound:
+                    LB_sum=LB_sum+(i-lower_bound)**2
 
-    changing_rows = np.copy(x_array)
+            return np.sqrt(LB_sum)
 
-    chosen_row = np.array(dfFeatures["mean"])
-    the_matrix,chosen_rowS = pdp(the_feature,changing_rows,chosen_row)
+        lenTest = dict_data['lenTest']
+        df_sample = dict_data['df_sample']
 
-    if compute_in_chunks:
-        preds,chosen_rowS_Pred = compute_pred_in_chunks(the_matrix,chosen_rowS)
-    else:
-        preds,chosen_rowS_Pred = compute_pred(the_matrix,chosen_rowS)
-        
-    list_of_test_indexes = range(lenTest)
-    pairs_of_curves = []
-    for comb in combinations(list_of_test_indexes, 2):
-        pairs_of_curves.append(comb)
-
-    k = 0
-    all_total = len(pairs_of_curves)
-    distance_matrix = np.zeros((lenTest,lenTest))
-    #start_time = time.time()
-    for pair in pairs_of_curves:
-        i = pair[0]
-        j = pair[1]
-        #if k > 100:
-            #elapsed = time.time() - start_time
-            #perc = np.round(k/float(all_total)*100, decimals=2)
-            #elapsed = time.time() - start_time
-            #togo = 100 - perc
-            #towait = np.around( (elapsed*togo/perc) / 60.0, decimals = 2)
-            #sys.stdout.write("\r{0}% - waiting time: {1:.3f}m".format(perc, towait))
-        k+=1
         if lb_keogh_bool:
-            distance = lb_keogh(preds[i],preds[j],rWarpedUsed)
-        else:
-            distance = rmse(preds[i],preds[j])
+            distance_between_2_samples = (df_sample[the_feature][num_samples-1]-df_sample[the_feature][0])/num_samples
+            sugg_r = int(np.ceil(df_features["sd"][the_feature]/10.0/distance_between_2_samples))
+            #print("Suggested r parameter:",sugg_r)
+            #rWarpedUsed = int(input("warp parameter window:"))
+            rWarpedUsed = sugg_r
+            if rWarpedUsed == 0:
+                rWarpedUsed = 1
+            
+        list_of_test_indexes = range(lenTest)
+        pairs_of_curves = []
+        for comb in combinations(list_of_test_indexes, 2):
+            pairs_of_curves.append(comb)
 
-        distance_matrix[i,j] = distance
-        distance_matrix[j,i] = distance
-        distance_matrix[i,i] = 0.0
-    #print()
-    #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
-    #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
-    clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='average')
-    #clust = AgglomerativeClustering(affinity='euclidean', n_clusters=clust_number, linkage='ward')
-    clust.fit(distance_matrix)
-    #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
-    labels_clust = clust.labels_
+        k = 0
+        all_total = len(pairs_of_curves)
+        distance_matrix = np.zeros((lenTest,lenTest))
+        #start_time = time.time()
+        for pair in pairs_of_curves:
+            i = pair[0]
+            j = pair[1]
+            #if k > 100:
+                #elapsed = time.time() - start_time
+                #perc = np.round(k/float(all_total)*100, decimals=2)
+                #elapsed = time.time() - start_time
+                #togo = 100 - perc
+                #towait = np.around( (elapsed*togo/perc) / 60.0, decimals = 2)
+                #sys.stdout.write("\r{0}% - waiting time: {1:.3f}m".format(perc, towait))
+            k+=1
+            if lb_keogh_bool:
+                distance = lb_keogh(preds[i],preds[j],rWarpedUsed)
+            else:
+                distance = rmse(preds[i],preds[j])
 
-    trasparenza = 1
-    dot_size = 5
+            distance_matrix[i,j] = distance
+            distance_matrix[j,i] = distance
+            distance_matrix[i,i] = 0.0
+        #print()
+        #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
+        #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
+        clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='average')
+        #clust = AgglomerativeClustering(affinity='euclidean', n_clusters=clust_number, linkage='ward')
+        clust.fit(distance_matrix)
+        #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
+        return distance_matrix,clust.labels_
 
-    #cmap = plt.get_cmap("gist_rainbow")
-    #cmap = plt.get_cmap("RdYlBu")
-    # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
+    def compute_sampling(df_test,num_samples,model,class_array,class_focus,scale,shift):
+        
+        def check_denormalization(scale_check,shift_check):
+            if scale_check is None or shift_check is None:
+                de_norm = False
+            else:
+                de_norm = True
+            return de_norm
+        
+        de_norm_bool = check_denormalization(scale,shift)
+        
+        ###### intro ######
+        data_set_pred_index = class_array.index(class_focus)
+        lenTest = len(df_test)
+        num_feat = len(df_test.columns)
+        #ylabel = [df_test.columns[-1]]
+        xlabel = list(df_test.columns)
+        x_array = df_test[xlabel].as_matrix()
+        #y_array = df_test[ylabel].as_matrix()
+        #labs = [True if l[0] in [class_array[0]] else False for l in y_array]
+        ###################
+        if de_norm_bool:
+            x_array = (x_array + shift)*scale
 
-    colors_10_cluster = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
-                         '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
+        pred = model.predict_proba(x_array)
+        original_preds = np.array([x[data_set_pred_index] for x in pred])
+        #thresh = get_roc_curve(original_preds,labs)["score"]
+        
 
+        dictLabtoIndex = {}
+        i =0
+        for laballa in xlabel:
+            dictLabtoIndex[laballa] = i
+            i+=1
+            
+        df_features = pd.DataFrame(columns=["max","min","mean","sd"],index=xlabel)
+
+        means = []
+        stds = []
+        mins = []
+        maxs = []
+        for laballa in xlabel:
+            THErightIndex = dictLabtoIndex[laballa]
+            if de_norm_bool:
+                vectzi = (list(df_test[laballa])+ shift[0][THErightIndex])*scale[0][THErightIndex]
+            else:
+                vectzi = list(df_test[laballa])
+            mean = np.mean(vectzi)
+            maxim = max(vectzi)
+            minion = min(vectzi)
+            standin = np.std(vectzi)
+            means.append(mean)
+            stds.append(standin)
+            mins.append(minion)
+            maxs.append(maxim)
+        df_features["max"] = maxs
+        df_features["min"] = mins
+        df_features["mean"] = means 
+        df_features["sd"] = stds
+        num_feat = len(xlabel)
+
+        df_sample = pd.DataFrame(columns=xlabel)
+
+        eps = 0.01
+        for laballa in xlabel:
+            lower_bound = df_features["min"][laballa] - eps
+            higher_bound = df_features["max"][laballa] + eps
+            #bound = df_features["mean"][laballa] + 2*df_features["sd"][laballa]
+            df_sample[laballa] = np.linspace(lower_bound,higher_bound ,num_samples)
+
+        changing_rows = np.copy(x_array)
+
+        important_data = {}
+        important_data['changing_rows'] = changing_rows
+        important_data['dictLabtoIndex'] = dictLabtoIndex
+        important_data['original_preds'] = original_preds
+        important_data['num_feat'] = num_feat
+        important_data['lenTest'] = lenTest
+        important_data['data_set_pred_index'] = data_set_pred_index
+        important_data['df_sample'] = df_sample
+        important_data['df_features'] = df_features
+        important_data['de_norm_bool'] = de_norm_bool
+
+        return important_data
+
+
+
+
+
+    important_data = compute_sampling(df_test,num_samples,model,class_array,class_focus,scale,shift)
+
+    #chosen_row = np.array(df_features["mean"])
+    the_matrix = pdp(important_data,the_feature)
+
+    preds = pred_comp_all(important_data,the_matrix,compute_in_chunks=compute_in_chunks)
+
+    distance_matrix,labels_clust = compute_clusters(important_data,preds,lb_keogh_bool)
+   
     if not local_curves:
         if lb_keogh_bool:
-            plotting_prediction_changes(preds,the_feature,labels_clust,clust_number,rWarped=rWarpedUsed,allClust=False)
+            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,clust_number,rWarped=rWarpedUsed,allClust=False)
         else:
-            plotting_prediction_changes(preds,the_feature,labels_clust,clust_number,rWarped=0,allClust=False)
+            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,clust_number,rWarped=0,allClust=False)
     else:
-
+        originalIndex = int(num_samples/2)
+        howFarIndex = 2
         allSamples = {}
 
-        changing_rows_local = np.copy(x_array)
 
-        chosen_row_local = np.array(dfFeatures["mean"])
-        the_matrix_local,chosen_rowS_local,allSamples = pdp_local(the_feature,changing_rows_local,chosen_row_local,allSamples)
+        #chosen_row_local = np.array(df_features["mean"])
+        the_matrix_local,allSamples = pdp_local(important_data,the_feature,allSamples)
 
-        preds_local,chosen_rowS_Pred_local = compute_pred_local(the_matrix_local,chosen_rowS_local)
+        preds_local = compute_pred_local(important_data,the_matrix_local)
 
         allSamplesOriginal = {}
         for key in allSamples:
-            allSamplesOriginal[key] = back_to_the_orginal(allSamples[key],key.split("-o-")[0],de_norm_bool)
+            allSamplesOriginal[key] = back_to_the_orginal(important_data,allSamples[key],key.split("-o-")[0])
 
         if lb_keogh_bool:
-            plotting_prediction_changes(preds,the_feature,labels_clust,clust_number,rWarped=rWarpedUsed,allClust=False, spag = True, pred_spag = preds_local)
+            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,
+                clust_number,rWarped=rWarpedUsed,allClust=False, spag = True, pred_spag = preds_local)
         else:
-            plotting_prediction_changes(preds,the_feature,labels_clust,clust_number,rWarped=0,allClust=False,spag = True, pred_spag = preds_local)
+            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,
+                clust_number,rWarped=0,allClust=False,spag = True, pred_spag = preds_local)
 
