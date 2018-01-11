@@ -7,111 +7,277 @@ from itertools import combinations
 from sklearn.cluster import AgglomerativeClustering
 import scipy.interpolate as si
 import sys
+def compute_sampling(df_test,
+                     model,
+                     class_array,
+                     class_focus,
+                     num_samples = 100,
+                     scale=None,
+                     shift=None):
+    
+    def check_denormalization(scale_check,shift_check):
+        if scale_check is None or shift_check is None:
+            de_norm = False
+        else:
+            de_norm = True
+        return de_norm
+    
+    de_norm_bool = check_denormalization(scale,shift)
+    
+    ###### intro ######
+    data_set_pred_index = class_array.index(class_focus)
+    lenTest = len(df_test)
+    num_feat = len(df_test.columns)
+    #ylabel = [df_test.columns[-1]]
+    xlabel = list(df_test.columns)
+    x_array = df_test[xlabel].as_matrix()
+    #y_array = df_test[ylabel].as_matrix()
+    #labs = [True if l[0] in [class_array[0]] else False for l in y_array]
+    ###################
+    if de_norm_bool:
+        x_array = (x_array + shift)*scale
 
-def plot(df_test,
+    pred = model.predict_proba(x_array)
+    original_preds = np.array([x[data_set_pred_index] for x in pred])
+    #thresh = get_roc_curve(original_preds,labs)["score"]
+    
+
+    dictLabtoIndex = {}
+    i =0
+    for laballa in xlabel:
+        dictLabtoIndex[laballa] = i
+        i+=1
+        
+    df_features = pd.DataFrame(columns=["max","min","mean","sd"],index=xlabel)
+
+    means = []
+    stds = []
+    mins = []
+    maxs = []
+    for laballa in xlabel:
+        THErightIndex = dictLabtoIndex[laballa]
+        if de_norm_bool:
+            vectzi = (list(df_test[laballa])+ shift[0][THErightIndex])*scale[0][THErightIndex]
+        else:
+            vectzi = list(df_test[laballa])
+        mean = np.mean(vectzi)
+        maxim = max(vectzi)
+        minion = min(vectzi)
+        standin = np.std(vectzi)
+        means.append(mean)
+        stds.append(standin)
+        mins.append(minion)
+        maxs.append(maxim)
+    df_features["max"] = maxs
+    df_features["min"] = mins
+    df_features["mean"] = means 
+    df_features["sd"] = stds
+    num_feat = len(xlabel)
+
+    df_sample = pd.DataFrame(columns=xlabel)
+
+    eps = 0.01
+    for laballa in xlabel:
+        lower_bound = df_features["min"][laballa] - eps
+        higher_bound = df_features["max"][laballa] + eps
+        #bound = df_features["mean"][laballa] + 2*df_features["sd"][laballa]
+        df_sample[laballa] = np.linspace(lower_bound,higher_bound ,num_samples)
+
+    changing_rows = np.copy(x_array)
+
+    important_data = {}
+    important_data['changing_rows'] = changing_rows
+    important_data['dictLabtoIndex'] = dictLabtoIndex
+    important_data['original_preds'] = original_preds
+    important_data['num_feat'] = num_feat
+    important_data['lenTest'] = lenTest
+    important_data['data_set_pred_index'] = data_set_pred_index
+    important_data['df_sample'] = df_sample
+    important_data['df_features'] = df_features
+    important_data['de_norm_bool'] = de_norm_bool
+
+    return important_data
+
+
+def pdp(dict_data, fix, num_samples = 100, chosen_row = None):
+    #t = time.time()
+    rows = dict_data["changing_rows"]
+    dictLabtoIndex = dict_data['dictLabtoIndex']
+    num_feat = dict_data['num_feat']
+    df_sample = dict_data['df_sample']
+
+    num_rows = len(rows)
+    new_matrix_f = np.zeros((num_rows,num_samples,num_feat))
+    sample_vals = df_sample[fix]
+    depth_index = 0
+    i = 0
+    for r in rows:
+        #if float(i+1)%10000==0:
+            #print ("---- loading matrix: ", np.round(i/float(num_rows),decimals=2)*100,"%")
+            #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+
+        i+=1
+        index_height = 0
+        for v in sample_vals:
+            new_r = np.copy(r)
+            new_r[dictLabtoIndex[fix]] = v
+            new_matrix_f[depth_index][index_height] = new_r
+            index_height+=1
+        depth_index+=1
+
+    if chosen_row is not None:
+        chosen_rowS = []
+        for v in sample_vals:
+            arow = np.copy(chosen_row)
+            arow[dictLabtoIndex[fix]] = v
+            chosen_rowS.append(arow)
+        return new_matrix_f,np.array(chosen_rowS)
+    else:
+        return new_matrix_f
+def pred_comp_all(dict_data,matrixChangedRows,model,num_samples=100,chosen_rowS = None,compute_in_chunks = False):
+
+    def compute_pred(dict_data,matrixChangedRows,chosen_rowS = None):
+        #t = time.time()
+        num_feat = dict_data['num_feat']
+        data_set_pred_index = dict_data['data_set_pred_index']
+
+
+        num_rows= len(matrixChangedRows)
+        pred_matrix = np.zeros((num_rows,num_samples))
+        matrixChangedRows = matrixChangedRows.reshape((num_rows*num_samples, num_feat))
+        ps = model.predict_proba(matrixChangedRows)
+        ps = [x[data_set_pred_index] for x in ps]
+        k = 0
+        for i in range(0,num_rows*num_samples):
+            if i%num_samples ==0:
+                pred_matrix[k] = ps[i:i+num_samples]
+                k+=1
+        if chosen_rowS is not None:
+            chosen_rowS_Pred = model.predict_proba(chosen_rowS)
+            chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
+            return pred_matrix, chosen_rowS_Pred
+        else:
+            return pred_matrix
+
+    def compute_pred_in_chunks(dict_data,matrixChangedRows,chosen_rowS = None):
+        #t = time.time()
+
+        num_feat = dict_data['num_feat']
+        data_set_pred_index = dict_data['data_set_pred_index']
+
+
+        num_rows= len(matrixChangedRows)
+        pred_matrix = np.zeros((num_rows,num_samples))
+        for i in range(0,num_rows):
+            #if float(i+1)%1000==0:
+                #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
+                #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+
+            ps = model.predict_proba(matrixChangedRows[i])
+            ps = [x[data_set_pred_index] for x in ps]
+            pred_matrix[i] = ps
+        if chosen_rowS is not None:
+            chosen_rowS_Pred = model.predict_proba(chosen_rowS)
+            chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
+            return pred_matrix, chosen_rowS_Pred
+        else:
+            return pred_matrix
+    if compute_in_chunks:
+        preds = compute_pred_in_chunks(dict_data,matrixChangedRows)
+    else:
+        preds = compute_pred(dict_data,matrixChangedRows)
+    return preds
+
+
+def compute_clusters(dict_data,preds,the_feature,num_samples=100,clust_number=10,lb_keogh_bool=False):
+
+    def rmse(curve1, curve2):
+        return np.sqrt(((curve1 - curve2) ** 2).mean())
+
+    def lb_keogh(s1,s2,r):
+        LB_sum=0
+        for ind,i in enumerate(s1):
+
+            lower_bound=min(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
+            upper_bound=max(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
+
+            if i>upper_bound:
+                LB_sum=LB_sum+(i-upper_bound)**2
+            elif i<lower_bound:
+                LB_sum=LB_sum+(i-lower_bound)**2
+
+        return np.sqrt(LB_sum)
+
+    lenTest = dict_data['lenTest']
+    df_sample = dict_data['df_sample']
+    df_features = dict_data['df_features']
+    dict_data['lb_keogh_bool'] = lb_keogh_bool
+
+    if lb_keogh_bool:
+        distance_between_2_samples = (df_sample[the_feature][num_samples-1]-df_sample[the_feature][0])/num_samples
+        sugg_r = int(np.ceil(df_features["sd"][the_feature]/10.0/distance_between_2_samples))
+        #print("Suggested r parameter:",sugg_r)
+        #rWarpedUsed = int(input("warp parameter window:"))
+        rWarpedUsed = sugg_r
+        if rWarpedUsed == 0:
+            rWarpedUsed = 1
+        dict_data['rWarpedUsed'] = rWarpedUsed
+
+        
+    list_of_test_indexes = range(lenTest)
+    pairs_of_curves = []
+    for comb in combinations(list_of_test_indexes, 2):
+        pairs_of_curves.append(comb)
+
+    k = 0
+    all_total = len(pairs_of_curves)
+    distance_matrix = np.zeros((lenTest,lenTest))
+    #start_time = time.time()
+    for pair in pairs_of_curves:
+        i = pair[0]
+        j = pair[1]
+        #if k > 100:
+            #elapsed = time.time() - start_time
+            #perc = np.round(k/float(all_total)*100, decimals=2)
+            #elapsed = time.time() - start_time
+            #togo = 100 - perc
+            #towait = np.around( (elapsed*togo/perc) / 60.0, decimals = 2)
+            #sys.stdout.write("\r{0}% - waiting time: {1:.3f}m".format(perc, towait))
+        k+=1
+        if lb_keogh_bool:
+            distance = lb_keogh(preds[i],preds[j],rWarpedUsed)
+        else:
+            distance = rmse(preds[i],preds[j])
+
+        distance_matrix[i,j] = distance
+        distance_matrix[j,i] = distance
+        distance_matrix[i,i] = 0.0
+    #print()
+    #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
+    #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
+    clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='average')
+    #clust = AgglomerativeClustering(affinity='euclidean', n_clusters=clust_number, linkage='ward')
+    clust.fit(distance_matrix)
+    #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
+    return distance_matrix,clust.labels_,dict_data
+
+def plot(important_data,
+             df_test,
              model,
              the_feature,
              class_array,
-             class_focus,
+             pred_matrix,
+             labels_clust,
+             dist_matrix,
              scale = None,
              shift = None,
              num_samples = 100,
              clust_number = 10,
              thresh = 0.5,
-             lb_keogh_bool= False,
-             local_curves = True, 
-             compute_in_chunks = False):
+             local_curves = True):
 
-    def pdp(dict_data, fix, chosen_row = None):
-        #t = time.time()
-        rows = dict_data["changing_rows"]
-        dictLabtoIndex = dict_data['dictLabtoIndex']
-        num_feat = dict_data['num_feat']
-        df_sample = dict_data['df_sample']
-
-        num_rows = len(rows)
-        new_matrix_f = np.zeros((num_rows,num_samples,num_feat))
-        sample_vals = df_sample[fix]
-        depth_index = 0
-        i = 0
-        for r in rows:
-            #if float(i+1)%10000==0:
-                #print ("---- loading matrix: ", np.round(i/float(num_rows),decimals=2)*100,"%")
-                #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
-
-            i+=1
-            index_height = 0
-            for v in sample_vals:
-                new_r = np.copy(r)
-                new_r[dictLabtoIndex[fix]] = v
-                new_matrix_f[depth_index][index_height] = new_r
-                index_height+=1
-            depth_index+=1
-
-        if chosen_row is not None:
-            chosen_rowS = []
-            for v in sample_vals:
-                arow = np.copy(chosen_row)
-                arow[dictLabtoIndex[fix]] = v
-                chosen_rowS.append(arow)
-            return new_matrix_f,np.array(chosen_rowS)
-        else:
-            return new_matrix_f
-    def pred_comp_all(dict_data,matrixChangedRows,chosen_rowS = None,compute_in_chunks = False):
-
-        def compute_pred(dict_data,matrixChangedRows,chosen_rowS = None):
-            #t = time.time()
-            num_feat = dict_data['num_feat']
-            data_set_pred_index = dict_data['data_set_pred_index']
-
-
-            num_rows= len(matrixChangedRows)
-            pred_matrix = np.zeros((num_rows,num_samples))
-            matrixChangedRows = matrixChangedRows.reshape((num_rows*num_samples, num_feat))
-            ps = model.predict_proba(matrixChangedRows)
-            ps = [x[data_set_pred_index] for x in ps]
-            k = 0
-            for i in range(0,num_rows*num_samples):
-                if i%num_samples ==0:
-                    pred_matrix[k] = ps[i:i+num_samples]
-                    k+=1
-            if chosen_rowS is not None:
-                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-                chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-                return pred_matrix, chosen_rowS_Pred
-            else:
-                return pred_matrix
-
-        def compute_pred_in_chunks(dict_data,matrixChangedRows,chosen_rowS = None):
-            #t = time.time()
-
-            num_feat = dict_data['num_feat']
-            data_set_pred_index = dict_data['data_set_pred_index']
-
-
-            num_rows= len(matrixChangedRows)
-            pred_matrix = np.zeros((num_rows,num_samples))
-            for i in range(0,num_rows):
-                #if float(i+1)%1000==0:
-                    #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
-                    #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
-
-                ps = model.predict_proba(matrixChangedRows[i])
-                ps = [x[data_set_pred_index] for x in ps]
-                pred_matrix[i] = ps
-            if chosen_rowS is not None:
-                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-                chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-                return pred_matrix, chosen_rowS_Pred
-            else:
-                return pred_matrix
-        if compute_in_chunks:
-            preds = compute_pred_in_chunks(important_data,the_matrix)
-        else:
-            preds = compute_pred(important_data,the_matrix)
-        return preds
-
-
+    
+    lb_keogh_bool = important_data['lb_keogh_bool']
 
 
     def plotting_prediction_changes(dict_data, pred_matrix, dist_matrix, fix, 
@@ -374,187 +540,19 @@ def plot(df_test,
             data_that = data_this
         return data_that
 
-
-
-
-    def compute_clusters(dict_data,preds,lb_keogh_bool):
-
-        def rmse(curve1, curve2):
-            return np.sqrt(((curve1 - curve2) ** 2).mean())
-
-        def lb_keogh(s1,s2,r):
-            LB_sum=0
-            for ind,i in enumerate(s1):
-
-                lower_bound=min(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
-                upper_bound=max(s2[(ind-r if ind-r>=0 else 0):(ind+r)])
-
-                if i>upper_bound:
-                    LB_sum=LB_sum+(i-upper_bound)**2
-                elif i<lower_bound:
-                    LB_sum=LB_sum+(i-lower_bound)**2
-
-            return np.sqrt(LB_sum)
-
-        lenTest = dict_data['lenTest']
-        df_sample = dict_data['df_sample']
-
-        if lb_keogh_bool:
-            distance_between_2_samples = (df_sample[the_feature][num_samples-1]-df_sample[the_feature][0])/num_samples
-            sugg_r = int(np.ceil(df_features["sd"][the_feature]/10.0/distance_between_2_samples))
-            #print("Suggested r parameter:",sugg_r)
-            #rWarpedUsed = int(input("warp parameter window:"))
-            rWarpedUsed = sugg_r
-            if rWarpedUsed == 0:
-                rWarpedUsed = 1
-            
-        list_of_test_indexes = range(lenTest)
-        pairs_of_curves = []
-        for comb in combinations(list_of_test_indexes, 2):
-            pairs_of_curves.append(comb)
-
-        k = 0
-        all_total = len(pairs_of_curves)
-        distance_matrix = np.zeros((lenTest,lenTest))
-        #start_time = time.time()
-        for pair in pairs_of_curves:
-            i = pair[0]
-            j = pair[1]
-            #if k > 100:
-                #elapsed = time.time() - start_time
-                #perc = np.round(k/float(all_total)*100, decimals=2)
-                #elapsed = time.time() - start_time
-                #togo = 100 - perc
-                #towait = np.around( (elapsed*togo/perc) / 60.0, decimals = 2)
-                #sys.stdout.write("\r{0}% - waiting time: {1:.3f}m".format(perc, towait))
-            k+=1
-            if lb_keogh_bool:
-                distance = lb_keogh(preds[i],preds[j],rWarpedUsed)
-            else:
-                distance = rmse(preds[i],preds[j])
-
-            distance_matrix[i,j] = distance
-            distance_matrix[j,i] = distance
-            distance_matrix[i,i] = 0.0
-        #print()
-        #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
-        #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
-        clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='average')
-        #clust = AgglomerativeClustering(affinity='euclidean', n_clusters=clust_number, linkage='ward')
-        clust.fit(distance_matrix)
-        #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
-        return distance_matrix,clust.labels_
-
-    def compute_sampling(df_test,num_samples,model,class_array,class_focus,scale,shift):
-        
-        def check_denormalization(scale_check,shift_check):
-            if scale_check is None or shift_check is None:
-                de_norm = False
-            else:
-                de_norm = True
-            return de_norm
-        
-        de_norm_bool = check_denormalization(scale,shift)
-        
-        ###### intro ######
-        data_set_pred_index = class_array.index(class_focus)
-        lenTest = len(df_test)
-        num_feat = len(df_test.columns)
-        #ylabel = [df_test.columns[-1]]
-        xlabel = list(df_test.columns)
-        x_array = df_test[xlabel].as_matrix()
-        #y_array = df_test[ylabel].as_matrix()
-        #labs = [True if l[0] in [class_array[0]] else False for l in y_array]
-        ###################
-        if de_norm_bool:
-            x_array = (x_array + shift)*scale
-
-        pred = model.predict_proba(x_array)
-        original_preds = np.array([x[data_set_pred_index] for x in pred])
-        #thresh = get_roc_curve(original_preds,labs)["score"]
-        
-
-        dictLabtoIndex = {}
-        i =0
-        for laballa in xlabel:
-            dictLabtoIndex[laballa] = i
-            i+=1
-            
-        df_features = pd.DataFrame(columns=["max","min","mean","sd"],index=xlabel)
-
-        means = []
-        stds = []
-        mins = []
-        maxs = []
-        for laballa in xlabel:
-            THErightIndex = dictLabtoIndex[laballa]
-            if de_norm_bool:
-                vectzi = (list(df_test[laballa])+ shift[0][THErightIndex])*scale[0][THErightIndex]
-            else:
-                vectzi = list(df_test[laballa])
-            mean = np.mean(vectzi)
-            maxim = max(vectzi)
-            minion = min(vectzi)
-            standin = np.std(vectzi)
-            means.append(mean)
-            stds.append(standin)
-            mins.append(minion)
-            maxs.append(maxim)
-        df_features["max"] = maxs
-        df_features["min"] = mins
-        df_features["mean"] = means 
-        df_features["sd"] = stds
-        num_feat = len(xlabel)
-
-        df_sample = pd.DataFrame(columns=xlabel)
-
-        eps = 0.01
-        for laballa in xlabel:
-            lower_bound = df_features["min"][laballa] - eps
-            higher_bound = df_features["max"][laballa] + eps
-            #bound = df_features["mean"][laballa] + 2*df_features["sd"][laballa]
-            df_sample[laballa] = np.linspace(lower_bound,higher_bound ,num_samples)
-
-        changing_rows = np.copy(x_array)
-
-        important_data = {}
-        important_data['changing_rows'] = changing_rows
-        important_data['dictLabtoIndex'] = dictLabtoIndex
-        important_data['original_preds'] = original_preds
-        important_data['num_feat'] = num_feat
-        important_data['lenTest'] = lenTest
-        important_data['data_set_pred_index'] = data_set_pred_index
-        important_data['df_sample'] = df_sample
-        important_data['df_features'] = df_features
-        important_data['de_norm_bool'] = de_norm_bool
-
-        return important_data
-
-
-
-
-
-    important_data = compute_sampling(df_test,num_samples,model,class_array,class_focus,scale,shift)
-
-    #chosen_row = np.array(df_features["mean"])
-    the_matrix = pdp(important_data,the_feature)
-
-    preds = pred_comp_all(important_data,the_matrix,compute_in_chunks=compute_in_chunks)
-
-    distance_matrix,labels_clust = compute_clusters(important_data,preds,lb_keogh_bool)
    
     if not local_curves:
         if lb_keogh_bool:
-            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,clust_number,rWarped=rWarpedUsed,allClust=False)
+            rWarpedUsed = important_data['rWarpedUsed']
+            plotting_prediction_changes(important_data,pred_matrix,dist_matrix,the_feature,labels_clust,clust_number,rWarped=rWarpedUsed,allClust=False)
         else:
-            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,clust_number,rWarped=0,allClust=False)
+            plotting_prediction_changes(important_data,pred_matrix,dist_matrix,the_feature,labels_clust,clust_number,rWarped=0,allClust=False)
     else:
         originalIndex = int(num_samples/2)
         howFarIndex = 2
         allSamples = {}
 
 
-        #chosen_row_local = np.array(df_features["mean"])
         the_matrix_local,allSamples = pdp_local(important_data,the_feature,allSamples)
 
         preds_local = compute_pred_local(important_data,the_matrix_local)
@@ -564,9 +562,10 @@ def plot(df_test,
             allSamplesOriginal[key] = back_to_the_orginal(important_data,allSamples[key],key.split("-o-")[0])
 
         if lb_keogh_bool:
-            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,
+            rWarpedUsed = important_data['rWarpedUsed']
+            plotting_prediction_changes(important_data,pred_matrix,dist_matrix,the_feature,labels_clust,
                 clust_number,rWarped=rWarpedUsed,allClust=False, spag = True, pred_spag = preds_local)
         else:
-            plotting_prediction_changes(important_data,preds,distance_matrix,the_feature,labels_clust,
+            plotting_prediction_changes(important_data,pred_matrix,dist_matrix,the_feature,labels_clust,
                 clust_number,rWarped=0,allClust=False,spag = True, pred_spag = preds_local)
 
