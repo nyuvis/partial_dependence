@@ -37,7 +37,9 @@ Required mandatory arguments:
 * ``df_test``: a ``pandas.DataFrame`` containing only the features 
   values for each istance in the test-set. 
 * ``model``: trained classfier as an object with the following properties. 
+  
   The object must have a method ``prodict_proba(X)`` which takes a ``numpy.array`` of shape ``(n, num_feat)`` as input and returns a ``numpy.array`` of shape ``(n, len(class_array))``.
+  
 * ``class_array``: a list of strings with all the classes name in the same order 
   as the predictions returned by ``prodict_proba(X)``.
 * ``class_focus``: a string with the class name of the desired partial dependence.
