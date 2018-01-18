@@ -26,7 +26,7 @@ and import it in python using:
 Plotting clustering of partial dependence
 ****************************************
 
-Following we will show the pipeline of function works. Please refer to the inline documentation of the methods for full information.
+Following we will show the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
 
 Initialization
 ##############
@@ -45,9 +45,9 @@ Required mandatory arguments:
 Optional arguments:
 *******************
 
-	* ``num_samples``: number of desired samples.
-	* ``scale``: scale parameter for normalization.
-	* ``shift``: shift parameter for normalization.
+* ``num_samples``: number of desired samples.
+* ``scale``: scale parameter for normalization.
+* ``shift``: shift parameter for normalization.
 
 .. code:: python
 
