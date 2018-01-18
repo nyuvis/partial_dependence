@@ -19,11 +19,11 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
     name='partial_dependence',
     version='0.0.1',
-    description='PartialDependence is a libray for visualizing input-output relationships of machine learning models.',
+    description='PartialDependence is a library for visualizing input-output relationships of machine learning models.',
     long_description=long_description,
     url='https://github.com/nyuvis/partial_dependence',
-    author='Paolo Tamagnini',
-    author_email='paolotamag@gmail.com',
+    author='Paolo Tamagnini, Josua Krause, Enrico Bertini',
+    author_email= 'paolotamag@gmail.com,josua.krause@nyu.edu,enrico.bertini@nyu.edu',
     license='MIT',
     classifiers=[
         'Development Status :: 4 - Beta',
