@@ -28,18 +28,20 @@ Plotting clustering of partial dependence
 
 Following we will show the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
 
+You can also run the jupyter notebook file to have a running example.
+
 Initialization
 ##############
 
-Required mandatory arguments:
-****************************
+Required arguments:
+*******************
 
 * ``df_test``: a ``pandas.DataFrame`` containing only the features 
   values for each istance in the test-set. 
 * ``model``: trained classfier as an object with the following properties. 
   
   The object must have a method ``prodict_proba(X)`` which takes a ``numpy.array`` of shape ``(n, num_feat)`` as input and returns a ``numpy.array`` of shape ``(n, len(class_array))``.
-  
+
 * ``class_array``: a list of strings with all the classes name in the same order 
   as the predictions returned by ``prodict_proba(X)``.
 * ``class_focus``: a string with the class name of the desired partial dependence.
@@ -78,4 +80,51 @@ do not insert any scale and shift parameters.
 
 
 
+Creating the matrix of istances vectors
+########################################
 
+By choosing a feature and changing it in sample range, for each row in the test-set we can create ``num_samples`` different versions of the original istance.
+
+``pdp()`` returns a 3D matrix ``numpy.array`` of shape ``(num_rows,num_samples,num_feat)`` storing all those different versions.
+
+
+Required argument:
+******************
+
+* ``fix``: string with name of the chosen feature as reported in a column of ``df_test``.
+
+
+.. code:: python
+
+	the_matrix = my_pdp_plot.pdp(chosen_feature)
+
+
+Computing prediction changes
+############################
+
+By feeding ``the_matrix`` to ``pred_comp_all()`` we are able to compute prediction values for each of the different vectors.
+
+.. code:: python
+
+	preds = my_pdp_plot.pred_comp_all(the_matrix)
+
+In ``preds``, a ``numpy.array`` of shape ``(num_rows,num_samples)``, we have for each element a prediction linked to an original istance of the test-set and a precise sample of the ``chosen_feature``.
+
+Clustering the partial dependence
+#################################
+
+.. code:: python
+	labels_clusters = my_pdp_plot.compute_clusters(preds,chosen_cluster_number)
+
+
+Plotting the results
+####################
+
+.. code:: python
+	my_pdp_plot.plot(preds,labels_clusters)
+
+.. image:: plot_alcohol.jpg
+    :width: 750px
+    :align: center
+    :height: 421px
+    :alt: alternate text
