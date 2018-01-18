@@ -123,7 +123,7 @@ Plotting the results
 .. code:: python
 	my_pdp_plot.plot(preds,labels_clusters)
 
-.. image:: plot_alcohol.jpg
+.. image:: plot_alcohol.png
     :width: 750px
     :align: center
     :height: 421px
