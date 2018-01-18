@@ -61,13 +61,13 @@ do not insert any scale and shift parameters.
 
 .. code:: python
 
-	my_pdp_plot = pdp_plot.PartialDependence( my_df_test,
-							                  my_model,
-							                  my_labels_name,
-							                  my_labels_focus,
-							                  my_number_of_samples,
-							                  my_scale,
-							                  my_shift )
+	my_pdp_plot = pdp_plot.PartialDependence(my_df_test,
+											my_model,
+											my_labels_name,
+											my_labels_focus,
+											my_number_of_samples,
+											my_scale,
+											my_shift )
 
 
 
