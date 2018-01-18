@@ -2,11 +2,11 @@ partial_dependence
 ==================
 
 A library for plotting partial dependency patterns of machine learning classfiers.
-Partial dependence measures a prediction change when changing one or more input features.
+Partial dependence measures the prediction change when changing one or more input features.
 We will focus only on 1D partial dependency plots. 
-For each istance in the test-set we can plot the prediction change as we change a single feature in a defined sample range.
-Then we cluster together similar plots, e.g. istances which react similarly as we change that feature value.
-The technique should give a black box approach to recognize set of istances where the model makes similar decisions.
+For each instance in the data we can plot the prediction change as we change a single feature in a defined sample range.
+Then we cluster similar plots, e.g., instances reacting similarly value changes, to reduce clutter.
+The technique is a black box approach to recognize sets of istances where the model makes similar decisions.
 
 You can install *partial_dependence* via
 
