@@ -46,15 +46,17 @@ Optional arguments:
 *******************
 
 * ``num_samples``: number of desired samples. Sampling a feature is done with:
-  ``numpy.linspace(min_value,max_value,num_samples)``, 
-  
+
+  ``numpy.linspace(min_value,max_value,num_samples)``
+
   where the bounds are related to min and max value for that feature in the test-set.
 * ``scale``: scale parameter vector for normalization.
 * ``shift``: shift parameter vector for normalization.
 
 Instead if you need to provide your data to the model in normalized form, 
 you have to define scale and shift such that: 
-``transformed_data = (original_data + shift)*scale``,
+
+``transformed_data = (original_data + shift)*scale``
 
 where ``shift`` and ``scale`` are both ``numpy.array`` of shape ``(1,num_feat)``.
 
