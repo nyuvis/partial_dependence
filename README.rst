@@ -6,7 +6,7 @@ Partial dependence measures the prediction change when changing one or more inpu
 We will focus only on 1D partial dependency plots. 
 For each instance in the data we can plot the prediction change as we change a single feature in a defined sample range.
 Then we cluster similar plots, e.g., instances reacting similarly value changes, to reduce clutter.
-The technique is a black box approach to recognize sets of istances where the model makes similar decisions.
+The technique is a black box approach to recognize sets of instances where the model makes similar decisions.
 
 You can install *partial_dependence* via
 
