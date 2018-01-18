@@ -114,6 +114,7 @@ Clustering the partial dependence
 #################################
 
 .. code:: python
+
 	labels_clusters = my_pdp_plot.compute_clusters(preds,chosen_cluster_number)
 
 
@@ -121,6 +122,7 @@ Plotting the results
 ####################
 
 .. code:: python
+
 	my_pdp_plot.plot(preds,labels_clusters)
 
 .. image:: plot_alcohol.png
