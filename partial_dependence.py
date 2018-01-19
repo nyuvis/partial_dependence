@@ -48,7 +48,7 @@ class PartialDependence(object):
                   model,
                   class_array,
                   class_focus,
-                  num_samples = 100,
+                  num_samples=100,
                   scale=None,
                   shift=None):
         self.df = df_test
