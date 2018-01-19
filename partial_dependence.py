@@ -222,12 +222,10 @@ class PartialDependence(object):
                 chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
                 return pred_matrix, chosen_rowS_Pred
             return pred_matrix
-        # FIXME: WTF is this?
+
         if compute_in_chunks:
-            preds = compute_pred_in_chunks(self, matrixChangedRows)
-        else:
-            preds = compute_pred(self, matrixChangedRows)
-        return preds
+            return compute_pred_in_chunks(self, matrixChangedRows)
+        return compute_pred(self, matrixChangedRows)
     
     def compute_clusters(self, preds, clust_number=10, lb_keogh_bool=False):
         the_feature = self.the_feature
