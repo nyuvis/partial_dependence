@@ -33,7 +33,7 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
     ],
-    keywords='partial dependence machine learning visual analytics data visualization plotting plot nyuvis',
+    keywords='clustering partial dependence machine learning visual analytics data visualization plotting plot nyuvis',
     py_modules=['partial_dependence'],
     install_requires=[],
 )
