@@ -135,7 +135,7 @@ The visualization is automatically saved in a png file in the same folder of the
 .. image:: plot_alcohol_for_rst.png
     :width: 750px
     :align: center
-    :height: 421px
+    :height: 419px
     :alt: alternate text
 
 
@@ -174,5 +174,5 @@ Data points representations
 .. image:: plot_alcohol_warped_3_for_rst.png
     :width: 750px
     :align: center
-    :height: 421px
+    :height: 413px
     :alt: alternate text
