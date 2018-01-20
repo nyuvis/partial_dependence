@@ -101,3 +101,7 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# viz printed
+plot_alcohol.png
+plot_alcohol_warped_3.png

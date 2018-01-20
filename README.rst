@@ -140,8 +140,18 @@ The visualization is automatically saved in a png file in the same folder of the
 
 
 ****************************************
-Customization of the visualization
+Customization and extra functions
 ****************************************
+
+Computing predictions in chunks
+###############################
+
+When using ``pred_comp_all()``, sometimes the amount of data to process is too large and it is necessary to divide it in chunks so that we don't run out of memory.
+To do so, just set the optional argument ``batch_size`` to the desired integer number. ``batch_size`` cannot be lower than ``num_samples`` defined in the initialization.
+
+.. code:: python
+
+	preds = my_pdp_plot.pred_comp_all( the_matrix, batch_size = 1000 )
 
 Clustering with DTW distance
 ############################

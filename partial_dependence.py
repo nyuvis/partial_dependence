@@ -177,7 +177,7 @@ class PartialDependence(object):
             return new_matrix_f, np.array(chosen_rowS)
         return new_matrix_f
         
-    def pred_comp_all(self, matrixChangedRows, chosen_rowS=None, compute_in_chunks=False):
+    def pred_comp_all(self, matrixChangedRows, chosen_rowS=None, batch_size=0):
         model = self.mdl
         num_samples = self.n_smpl
 
@@ -202,30 +202,60 @@ class PartialDependence(object):
                 return pred_matrix, chosen_rowS_Pred
             return pred_matrix
 
-        def compute_pred_in_chunks(self, matrixChangedRows, chosen_rowS=None):
+
+        def compute_pred_in_chunks(self, matrixChangedRows, number_all_preds_in_batch, chosen_rowS=None,):
+            if number_all_preds_in_batch < num_samples:
+                print ("Error: batch size cannot be less than sample size.")
+                return np.nan
             #t = time.time()
             num_feat = self.num_feat
             data_set_pred_index = self.data_set_pred_index
 
             num_rows= len(matrixChangedRows)
             pred_matrix = np.zeros((num_rows, num_samples))
-            for i in range(0, num_rows):
+
+            #number_all_preds_in_batch = 1000
+
+            num_of_instances_in_batch = int( np.floor( number_all_preds_in_batch / num_samples ) )
+            how_many_calls = int( np.ceil( num_rows / num_of_instances_in_batch ) )
+            residual = num_of_instances_in_batch * how_many_calls - num_rows
+            num_of_instances_in_last_batch = num_of_instances_in_batch - residual
+
+            #print ("num_of_instances_in_batch"  ,  num_of_instances_in_batch)
+            #print ( "how_many_calls" , how_many_calls )
+            #print ( "residual" , residual )
+            #print ( "num_of_instances_in_last_batch" , num_of_instances_in_last_batch )
+
+
+            for i in range(0, how_many_calls):
                 #if float(i+1)%1000==0:
                     #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
                     #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
 
-                ps = model.predict_proba(matrixChangedRows[i])
-                ps = [ x[data_set_pred_index] for x in ps ]
-                pred_matrix[i] = ps
+
+                low_bound_index = i*num_of_instances_in_batch
+                high_bound_index = low_bound_index + num_of_instances_in_batch
+
+                if i == how_many_calls -1 and residual != 0:
+                    high_bound_index = low_bound_index + num_of_instances_in_last_batch
+
+                matrix_batch = matrixChangedRows[low_bound_index:high_bound_index]
+
+                pred_matrix_batch = compute_pred(self,matrix_batch)
+
+                pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
+
+
             if chosen_rowS is not None:
                 chosen_rowS_Pred = model.predict_proba(chosen_rowS)
                 chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
                 return pred_matrix, chosen_rowS_Pred
             return pred_matrix
 
-        if compute_in_chunks:
-            return compute_pred_in_chunks(self, matrixChangedRows)
+        if batch_size != 0:
+            return compute_pred_in_chunks(self, matrixChangedRows, number_all_preds_in_batch = batch_size)
         return compute_pred(self, matrixChangedRows)
+
     
     def compute_clusters(self, preds, clust_number=10, lb_keogh_bool=False):
         the_feature = self.the_feature
