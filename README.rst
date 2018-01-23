@@ -186,8 +186,7 @@ In case you want to highligh a particular vector partial dependence to compare w
 
 	the_matrix, custom_vectors = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
 
-	preds,custom_preds = my_pdp_plot.pred_comp_all( the_matrix, 
-													chosen_row_alterations = custom_vectors )
+	preds,custom_preds = my_pdp_plot.pred_comp_all( the_matrix, chosen_row_alterations = custom_vectors )
 
 	labels_clusters = my_pdp_plot.compute_clusters( preds, chosen_cluster_number )
 
