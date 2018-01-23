@@ -43,6 +43,48 @@ __version__ = "0.0.1"
 
 
 class PartialDependence(object):
+
+    '''
+
+    Initialization Parameters
+    -------------------------
+
+    df_test: pandas.DataFrame
+        (REQUIRED) dataframe containing only the features values for each instance in the test-set.
+
+    model: Python object
+        (REQUIRED) Trained classifier as an object with the following properties:
+        The object must have a method predict_proba(X) 
+        which takes a numpy.array of shape (n, num_feat) 
+        as input and returns a numpy.array of shape (n, len(class_array)).
+
+    class_array: list of strings
+        (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+    class_focus: string
+        (REQUIRED) class name of the desired partial dependence
+
+    num_samples: integer value
+        (OPTIONAL) number of desired samples. Sampling a feature is done with:
+            numpy.linspace(min_value,max_value,num_samples)
+        where the bounds are related to min and max value for that feature in the test-set.
+
+    scale: float value
+        (OPTIONAL) scale parameter vector for normalization.
+
+    shift: float value
+        (OPTIONAL) shift parameter vector for normalization.
+        
+            If you need to provide your data to the model in normalized form, 
+            you have to define scale and shift such that:
+                transformed_data = (original_data + shift)*scale
+            where shift and scale are both numpy.array of shape (1,num_feat).
+            If the model uses directly the raw data in df_test without any transformation, 
+            do not insert any scale and shift parameters.
+
+
+    '''
+
     def __init__(self, 
                   df_test,
                   model,
@@ -146,6 +188,32 @@ class PartialDependence(object):
         self.de_norm_bool = de_norm_bool
         
     def pdp(self, fix, chosen_row=None):
+
+        """
+        Produces for each instance the test-set num_samples different versions.
+        The versions vary just for the feature fix, which changes within the sample df_sample[fix].
+        All the other features values remain the same.
+
+        Parameters
+        ----------
+        fix : string
+            (REQUIRED) The name of feature as reported in one of the df_test columns.
+       
+        chosen_row : numpy.array of shape (1,num_feat)
+            (OPTIONAL) A custom row, defined by the user, used to test or compare the results.
+            For example you could insert a row with mean values in each feature.
+
+        Returns
+        -------
+        new_matrix_f: numpy.array of shape (num_rows, num_samples, num_feat)
+            (ALWAYS) It contains all the different versions obtained from the original test instances by changing the feature fix in the sample.
+
+        chosen_row_alterations: numpy.array of shape (num_samples, num_feat)
+            (IF REQUESTED) If chosen_row was defined by the user, we also return this matrix, otherwise just new_matrix_f is returned.
+            It contains all the different versions obtained from the custom chosen_row by changing the feature fix in the sample.           
+
+        """
+
         #t = time.time()
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -169,41 +237,83 @@ class PartialDependence(object):
             depth_index += 1
 
         if chosen_row is not None:
-            chosen_rowS = []
+
+            chosen_row_alterations = []
+
             for v in sample_vals:
                 arow = np.copy(chosen_row)
                 arow[dictLabtoIndex[fix]] = v
-                chosen_rowS.append(arow)
-            return new_matrix_f, np.array(chosen_rowS)
+                chosen_row_alterations.append(arow)
+            
+            chosen_row_alterations = np.array(chosen_row_alterations)
+
+            return new_matrix_f, chosen_row_alterations
         return new_matrix_f
         
-    def pred_comp_all(self, matrixChangedRows, chosen_rowS=None, batch_size=0):
+    def pred_comp_all(self, matrix_changed_rows, chosen_row_alterations=None, batch_size=0):
+
+
+        """
+        Produces for each instance the test-set num_samples different predictions.
+        Each predictions is relative to a different version of the orginal istance.
+        A version varies just just by the feature fix, which changes within the sample df_sample[fix].
+        All the other features values remain the same.
+
+        Parameters
+        ----------
+        matrix_changed_rows : numpy.array of shape (num_rows, num_samples, num_feat)
+            (REQUIRED) Returned by previous function pdp().
+
+        chosen_row_alterations : numpy.array of shape (num_samples, num_feat)
+            (OPTIONAL) Returned by previous function pdp().
+
+        batch_size: integer value
+            (OPTIONAL) The batch size is required when the size ( num_rows X num_samples X num_feat ) becomes too large.
+            In this case you might want to compute the predictions in chunks of size batch_size, to not run out of memory.
+            If batch_size = 0, then predictions are computed with a single call of model.predict_proba().
+            Otherwise the number of calls is automatically computed and it will depend on the user-defined batch_size parameter.
+            In order to not split up predictions relative to a same instance in different chunks, 
+            batch_size must be greater or equale to num_samples.
+
+        Returns
+        -------
+        pred_matrix: numpy.array of shape (num_rows, num_samples)
+            (ALWAYS) It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
+
+        chosen_row_preds: numpy.array of shape (1, num_samples)
+            (IF REQUESTED) If chosen_row_alterations was supplied by the user, we also return this array, otherwise just pred_matrix is returned.
+            It contains all the different predictions obtained from the different versions of custom chosen_row, stored in chosen_row_alterations.          
+
+
+        """
+        
+
         model = self.mdl
         num_samples = self.n_smpl
 
-        def compute_pred(self, matrixChangedRows, chosen_rowS=None):
+        def compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct=None):
             #t = time.time()
             num_feat = self.num_feat
             data_set_pred_index = self.data_set_pred_index
 
-            num_rows= len(matrixChangedRows)
+            num_rows= len(matrix_changed_rows)
             pred_matrix = np.zeros((num_rows, num_samples))
-            matrixChangedRows = matrixChangedRows.reshape((num_rows * num_samples, num_feat))
-            ps = model.predict_proba(matrixChangedRows)
+            matrix_changed_rows = matrix_changed_rows.reshape((num_rows * num_samples, num_feat))
+            ps = model.predict_proba(matrix_changed_rows)
             ps = [ x[data_set_pred_index] for x in ps ]
             k = 0
             for i in range(0, num_rows * num_samples):
                 if i % num_samples == 0:
                     pred_matrix[k] = ps[i:i + num_samples]
                     k += 1
-            if chosen_rowS is not None:
-                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-                chosen_rowS_Pred = [ x[data_set_pred_index] for x in chosen_rowS_Pred ]
-                return pred_matrix, chosen_rowS_Pred
+            if chosen_row_alterations_sub_funct is not None:
+                chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
+                chosen_row_preds = np.array([ x[data_set_pred_index] for x in chosen_row_preds ])
+                return pred_matrix, chosen_row_preds
             return pred_matrix
 
 
-        def compute_pred_in_chunks(self, matrixChangedRows, number_all_preds_in_batch, chosen_rowS=None,):
+        def compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch, chosen_row_alterations_sub_funct=None):
             if number_all_preds_in_batch < num_samples:
                 print ("Error: batch size cannot be less than sample size.")
                 return np.nan
@@ -211,7 +321,7 @@ class PartialDependence(object):
             num_feat = self.num_feat
             data_set_pred_index = self.data_set_pred_index
 
-            num_rows= len(matrixChangedRows)
+            num_rows= len(matrix_changed_rows)
             pred_matrix = np.zeros((num_rows, num_samples))
 
             #number_all_preds_in_batch = 1000
@@ -239,25 +349,52 @@ class PartialDependence(object):
                 if i == how_many_calls -1 and residual != 0:
                     high_bound_index = low_bound_index + num_of_instances_in_last_batch
 
-                matrix_batch = matrixChangedRows[low_bound_index:high_bound_index]
+                matrix_batch = matrix_changed_rows[low_bound_index:high_bound_index]
 
                 pred_matrix_batch = compute_pred(self,matrix_batch)
 
                 pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
 
 
-            if chosen_rowS is not None:
-                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-                chosen_rowS_Pred = [x[data_set_pred_index] for x in chosen_rowS_Pred]
-                return pred_matrix, chosen_rowS_Pred
+            if chosen_row_alterations_sub_funct is not None:
+                chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
+                chosen_row_preds = np.array([x[data_set_pred_index] for x in chosen_row_preds])
+                return pred_matrix, chosen_row_preds
             return pred_matrix
 
         if batch_size != 0:
-            return compute_pred_in_chunks(self, matrixChangedRows, number_all_preds_in_batch = batch_size)
-        return compute_pred(self, matrixChangedRows)
+            return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size, chosen_row_alterations_sub_funct = chosen_row_alterations)
+        return compute_pred(self, matrix_changed_rows,chosen_row_alterations_sub_funct = chosen_row_alterations)
 
     
     def compute_clusters(self, preds, clust_number=10, lb_keogh_bool=False):
+
+        """
+        Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
+        The clustering is done with the agglomerative technique using a distance matrix.
+        The distance is measured either with root mean square error (RMSE) or with dynamic time warping distance (DTW),
+        depending on the user choice.
+
+        Parameters
+        ----------
+        preds : numpy.array of shape (num_rows, num_samples)
+            (REQUIRED) Returned by previous function pred_comp_all().
+
+        clust_number : integer value
+            (OPTIONAL) The number of desired clusters.
+
+        lb_keogh_bool: boolean value
+            (OPTIONAL) If True the distance among the curves will be measured by LB Keogh distance (an approximation of DTW distance).
+            If False, RMSE will be used instead.
+
+        Returns
+        -------
+        labels_array: numpy.array of shape (1, num_rows)
+            (ALWAYS) An array with each element with index relative to the test-set instance and with value relative to one of the clust_number clusters.
+
+        """
+
+
         the_feature = self.the_feature
         num_samples = self.n_smpl
         
@@ -329,13 +466,42 @@ class PartialDependence(object):
         clust.fit(distance_matrix)
         #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
         self.dist_matrix = distance_matrix
-        return clust.labels_
+        labels_array = clust.labels_
+        return labels_array
 
     def plot(self,
              pred_matrix,
              labels_clust,
              thresh = 0.5,
-             local_curves = True):
+             local_curves = True,
+             chosen_row_preds_to_plot = None):
+
+        """
+        Porduces the visualization printing it in a .png file in the current path.
+        The visualization will display broad curves with color linked to different clusters.
+        The orginal instances are displayed with coordinates (orginal feature value, original prediction) either as
+        local curves or dots depending on the local_curves argument value.
+
+        Parameters
+        ----------
+        pred_matrix : numpy.array of shape (num_rows, num_samples)
+            (REQUIRED) Returned by previous function pred_comp_all().
+
+        labels_clust : numpy.array of shape (1, num_rows)
+            (REQUIRED) Returned by previous function compute_clusters().
+
+        thresh: float value
+            (OPTIONAL) The threshold is displayed as a red dashed line parallel to the x-axis.
+
+        local_curves: boolean value
+            (OPTIONAL) If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
+
+        chosen_row_preds_to_plot: numpy.array of shape (1, num_samples)
+            (OPTIONAL) Returned by previous function pred_comp_all().
+            Such values will be displayed as red curve in the plot.
+
+        """
+
         lb_keogh_bool = self.lb_keogh_bool
 
         the_feature = self.the_feature
@@ -349,7 +515,7 @@ class PartialDependence(object):
         shift = self.shft
 
         def plotting_prediction_changes(pred_matrix, dist_matrix, fix, 
-            labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None):
+            labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None, chosen_row_preds = chosen_row_preds_to_plot):
                 
             def b_spline(x,y):
                 n_local_points = len(x)
@@ -474,7 +640,10 @@ class PartialDependence(object):
                         plt.plot(x_i, y_i, alpha=0.8, color=colors_10_cluster[i])
             #plt.plot(df_sample[fix],mean_preds,color="red",alpha=1)
             #plt.fill_between(df_sample[fix], mean_preds-std_preds, mean_preds+std_preds,color="green",alpha=0.25)
-            #plt.plot(df_sample[fix],chosen_rowS_Pred,color="red",alpha=1)
+            
+            if chosen_row_preds is not None:
+                plt.plot(original_data_sample,chosen_row_preds,color="red",lw=2)
+
             the_mean_value = back_to_the_orginal(df_features["mean"][fix], fix)
             plt.axvline(x=the_mean_value, color="green", linestyle='--')
             plt.axhline(y=thresh, color="red", linestyle='--')
@@ -536,33 +705,33 @@ class PartialDependence(object):
                     index_height += 1
                 depth_index += 1
             if chosen_row is not None:
-                chosen_rowS = []
+                chosen_row_alterations = []
                 for v in sample_vals:
                     arow = np.copy(chosen_row)
                     arow[dictLabtoIndex[fix]] = v
-                    chosen_rowS.append(arow)
-                return new_matrix_f, np.array(chosen_rowS), allSamples
+                    chosen_row_alterations.append(arow)
+                return new_matrix_f, np.array(chosen_row_alterations), allSamples
             return new_matrix_f, allSamples
 
-        def compute_pred_local(matrixChangedRows, chosen_rowS=None):
+        def compute_pred_local(matrix_changed_rows, chosen_row_alterations=None):
             num_feat = self.num_feat
             data_set_pred_index = self.data_set_pred_index
             numS = num_samples + 1
             #t = time.time()
-            num_rows= len(matrixChangedRows)
+            num_rows= len(matrix_changed_rows)
             pred_matrix = np.zeros((num_rows, numS))
-            matrixChangedRows = matrixChangedRows.reshape((num_rows * numS, num_feat))
-            ps = model.predict_proba(matrixChangedRows)
+            matrix_changed_rows = matrix_changed_rows.reshape((num_rows * numS, num_feat))
+            ps = model.predict_proba(matrix_changed_rows)
             ps = [ x[data_set_pred_index] for x in ps ]
             k = 0
             for i in range(0, num_rows * numS):
                 if i % numS ==0:
                     pred_matrix[k] = ps[i:i + numS]
                     k += 1
-            if chosen_rowS is not None:
-                chosen_rowS_Pred = model.predict_proba(chosen_rowS)
-                chosen_rowS_Pred = [ x[data_set_pred_index] for x in chosen_rowS_Pred ]
-                return pred_matrix, chosen_rowS_Pred
+            if chosen_row_alterations is not None:
+                chosen_row_preds = model.predict_proba(chosen_row_alterations)
+                chosen_row_preds = [ x[data_set_pred_index] for x in chosen_row_preds ]
+                return pred_matrix, chosen_row_preds
             return pred_matrix
 
         def back_to_the_orginal(data_this, fix):
@@ -582,11 +751,11 @@ class PartialDependence(object):
                 plotting_prediction_changes(pred_matrix, dist_matrix,
                                             the_feature, labels_clust,
                                             clust_number, rWarped=rWarpedUsed,
-                                            allClust=False)
+                                            allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
             else:
                 plotting_prediction_changes(pred_matrix, dist_matrix, the_feature,
                                             labels_clust, clust_number, rWarped=0,
-                                            allClust=False)
+                                            allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
         else:
             originalIndex = int(num_samples / 2)
             howFarIndex = 2
@@ -602,7 +771,7 @@ class PartialDependence(object):
             if lb_keogh_bool:
                 rWarpedUsed = self.rWarpedUsed
                 plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
-                    clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local)
+                    clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local, chosen_row_preds = chosen_row_preds_to_plot)
             else:
                 plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
-                    clust_number, rWarped=0, allClust=False, spag=True, pred_spag=preds_local)
+                    clust_number, rWarped=0, allClust=False, spag=True, pred_spag=preds_local ,chosen_row_preds = chosen_row_preds_to_plot)

@@ -57,7 +57,7 @@ Optional arguments:
 * ``scale``: scale parameter vector for normalization.
 * ``shift``: shift parameter vector for normalization.
 
-Instead if you need to provide your data to the model in normalized form, 
+If you need to provide your data to the model in normalized form, 
 you have to define scale and shift such that: 
 
 ``transformed_data = (original_data + shift)*scale``
@@ -175,4 +175,27 @@ Data points representations
     :width: 750px
     :align: center
     :height: 413px
+    :alt: alternate text
+
+Highlighting a Custom Vector
+###########################
+
+In case you want to highligh a particular vector partial dependence to compare with the clusters, this is how it works..
+
+.. code:: python
+
+	the_matrix, custom_vectors = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
+
+	preds,custom_preds = my_pdp_plot.pred_comp_all( the_matrix, 
+													chosen_row_alterations = custom_vectors )
+
+	labels_clusters = my_pdp_plot.compute_clusters( preds, chosen_cluster_number )
+
+	my_pdp_plot.plot( preds, labels_clusters, local_curves = False,
+	                   chosen_row_preds_to_plot = custom_preds )
+
+.. image:: plot_alcohol_highlight_vect_for_rst.png
+    :width: 750px
+    :align: center
+    :height: 490px
     :alt: alternate text
