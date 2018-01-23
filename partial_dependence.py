@@ -41,6 +41,118 @@ else:
     
 __version__ = "0.0.1"
 
+class PdpCurves(object):
+
+    '''
+    This class is to store the most important information needed for the visualization.
+    The object created will be updated depending on the user actions.
+
+    Intialization
+    -------------
+
+        _preds: numpy.array of shape (num_rows, num_samples)
+            each row is relative to a different instance, each column to a different sample, each element is a prediction value relative to that combination.
+            It is computed from within the function PartialDependence.pred_comp_all().
+        
+    Updates
+    -------
+        _dm: numpy.array of shape (num_rows, num_rows)
+            the distance matrix holds the distances among each partial dependence curve. It is computed within this class either with RMSE or with LB Keogh distance,
+            depending from the r_param.
+        
+        r_param: integer value
+            this parameter is needed to compute the distance matrix with LB Keogh distance.
+            If it is equal to None, _dm will be relative to RMSE distance.
+            It can be computed by the function PartialDependence.get_optimal_keogh_radius().
+
+        labels_cluster: numpy.array of shape (1, num_rows)
+            Computed by PartialDependence.compute_clusters(), it holds the information of the clustering results.
+            Each element reports an integer cluster label relative to the instance with same index in the test-set. 
+
+    '''
+
+    def __init__(self, preds):
+        self._preds = preds
+        self._dm = None
+        self.r_param = None
+
+        self.labels_cluster = None
+
+    def write_labels(self,labels_array):
+        self.labels_cluster = labels_array
+
+    def get_labels(self):
+        return self.labels_cluster
+
+    def get_preds(self):
+        return self._preds
+
+    def get_dm(self):
+        if self._dm is None:
+            self._dm = self._compute_dm()
+        return self._dm
+
+    def _compute_dm(self):
+        preds = self._preds
+        lenTest = len(self._preds)
+
+        def rmse(curve1, curve2):
+            return np.sqrt(((curve1 - curve2) ** 2).mean())
+
+        def lb_keogh(s1, s2, r):
+            LB_sum=0
+            for (ind, i) in enumerate(s1):
+                lower_bound=min(s2[(ind - r if ind - r >= 0 else 0):(ind + r)])
+                upper_bound=max(s2[(ind - r if ind - r >= 0 else 0):(ind + r)])
+                if i > upper_bound:
+                    LB_sum = LB_sum + (i - upper_bound) ** 2
+                elif i < lower_bound:
+                    LB_sum = LB_sum + (i - lower_bound) ** 2
+            return np.sqrt(LB_sum)
+        
+        if self.r_param is None:
+            lb_keogh_bool = False
+        else:
+            lb_keogh_bool = True
+
+        #self.lb_keogh_bool = lb_keogh_bool
+
+        list_of_test_indexes = range(lenTest)
+        pairs_of_curves = []
+        for comb in combinations(list_of_test_indexes, 2):
+            pairs_of_curves.append(comb)
+
+        k = 0
+        all_total = len(pairs_of_curves)
+        distance_matrix = np.zeros((lenTest, lenTest))
+        #start_time = time.time()
+        for pair in pairs_of_curves:
+            i = pair[0]
+            j = pair[1]
+
+            k+=1
+            if lb_keogh_bool:
+                distance = lb_keogh(preds[i], preds[j], self.r_param)
+            else:
+                distance = rmse(preds[i], preds[j])
+
+            distance_matrix[i, j] = distance
+            distance_matrix[j, i] = distance
+            distance_matrix[i, i] = 0.0
+
+        return distance_matrix
+
+    def get_keogh_radius(self):
+        return self.r_param
+
+    def set_keogh_radius(self, r_param):
+        self._dm = None
+        self.r_param = r_param
+
+
+
+    
+
 
 class PartialDependence(object):
 
@@ -84,6 +196,7 @@ class PartialDependence(object):
 
 
     '''
+
 
     def __init__(self, 
                   df_test,
@@ -277,8 +390,9 @@ class PartialDependence(object):
 
         Returns
         -------
-        pred_matrix: numpy.array of shape (num_rows, num_samples)
-            (ALWAYS) It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
+        curves_returned: python object
+            (ALWAYS) An itialized object from the class PdpCurves.
+            It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
 
         chosen_row_preds: numpy.array of shape (1, num_samples)
             (IF REQUESTED) If chosen_row_alterations was supplied by the user, we also return this array, otherwise just pred_matrix is returned.
@@ -306,11 +420,14 @@ class PartialDependence(object):
                 if i % num_samples == 0:
                     pred_matrix[k] = ps[i:i + num_samples]
                     k += 1
+
+            curves_returned = PdpCurves(pred_matrix)
+
             if chosen_row_alterations_sub_funct is not None:
                 chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
                 chosen_row_preds = np.array([ x[data_set_pred_index] for x in chosen_row_preds ])
-                return pred_matrix, chosen_row_preds
-            return pred_matrix
+                return curves_returned, chosen_row_preds
+            return curves_returned
 
 
         def compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch, chosen_row_alterations_sub_funct=None):
@@ -355,71 +472,26 @@ class PartialDependence(object):
 
                 pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
 
+            curves_returned = PdpCurves(pred_matrix)
 
             if chosen_row_alterations_sub_funct is not None:
                 chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
                 chosen_row_preds = np.array([x[data_set_pred_index] for x in chosen_row_preds])
-                return pred_matrix, chosen_row_preds
-            return pred_matrix
+                return curves_returned, chosen_row_preds
+            return curves_returned
 
         if batch_size != 0:
-            return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size, chosen_row_alterations_sub_funct = chosen_row_alterations)
-        return compute_pred(self, matrix_changed_rows,chosen_row_alterations_sub_funct = chosen_row_alterations)
+            return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size, 
+                chosen_row_alterations_sub_funct = chosen_row_alterations)
+        return compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct = chosen_row_alterations)
 
-    
-    def compute_clusters(self, preds, clust_number=10, lb_keogh_bool=False):
+    def get_optimal_keogh_radius(self):
 
-        """
-        Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
-        The clustering is done with the agglomerative technique using a distance matrix.
-        The distance is measured either with root mean square error (RMSE) or with dynamic time warping distance (DTW),
-        depending on the user choice.
+            the_feature = self.the_feature
+            num_samples = self.n_smpl
+            df_sample = self.df_sample
+            df_features = self.df_features
 
-        Parameters
-        ----------
-        preds : numpy.array of shape (num_rows, num_samples)
-            (REQUIRED) Returned by previous function pred_comp_all().
-
-        clust_number : integer value
-            (OPTIONAL) The number of desired clusters.
-
-        lb_keogh_bool: boolean value
-            (OPTIONAL) If True the distance among the curves will be measured by LB Keogh distance (an approximation of DTW distance).
-            If False, RMSE will be used instead.
-
-        Returns
-        -------
-        labels_array: numpy.array of shape (1, num_rows)
-            (ALWAYS) An array with each element with index relative to the test-set instance and with value relative to one of the clust_number clusters.
-
-        """
-
-
-        the_feature = self.the_feature
-        num_samples = self.n_smpl
-        
-        def rmse(curve1, curve2):
-            return np.sqrt(((curve1 - curve2) ** 2).mean())
-
-        def lb_keogh(s1, s2, r):
-            LB_sum=0
-            for (ind, i) in enumerate(s1):
-                lower_bound=min(s2[(ind - r if ind - r >= 0 else 0):(ind + r)])
-                upper_bound=max(s2[(ind - r if ind - r >= 0 else 0):(ind + r)])
-                if i > upper_bound:
-                    LB_sum = LB_sum + (i - upper_bound) ** 2
-                elif i < lower_bound:
-                    LB_sum = LB_sum + (i - lower_bound) ** 2
-            return np.sqrt(LB_sum)
-
-        lenTest = self.lenTest
-        df_sample = self.df_sample
-        df_features = self.df_features
-        
-        self.lb_keogh_bool = lb_keogh_bool
-        self.clust_number = clust_number
-
-        if lb_keogh_bool:
             distance_between_2_samples = \
                 (df_sample[the_feature][num_samples-1] - df_sample[the_feature][0]) / num_samples
             sugg_r = int(np.ceil(df_features["sd"][the_feature] / 10.0 / distance_between_2_samples))
@@ -430,34 +502,33 @@ class PartialDependence(object):
                 rWarpedUsed = 1
             self.rWarpedUsed = rWarpedUsed
 
-        list_of_test_indexes = range(lenTest)
-        pairs_of_curves = []
-        for comb in combinations(list_of_test_indexes, 2):
-            pairs_of_curves.append(comb)
+            return rWarpedUsed
 
-        k = 0
-        all_total = len(pairs_of_curves)
-        distance_matrix = np.zeros((lenTest, lenTest))
-        #start_time = time.time()
-        for pair in pairs_of_curves:
-            i = pair[0]
-            j = pair[1]
-            #if k > 100:
-                #elapsed = time.time() - start_time
-                #perc = np.round(k/float(all_total)*100, decimals=2)
-                #elapsed = time.time() - start_time
-                #togo = 100 - perc
-                #towait = np.around( (elapsed*togo/perc) / 60.0, decimals = 2)
-                #sys.stdout.write("\r{0}% - waiting time: {1:.3f}m".format(perc, towait))
-            k+=1
-            if lb_keogh_bool:
-                distance = lb_keogh(preds[i], preds[j], rWarpedUsed)
-            else:
-                distance = rmse(preds[i], preds[j])
 
-            distance_matrix[i, j] = distance
-            distance_matrix[j, i] = distance
-            distance_matrix[i, i] = 0.0
+    
+    def compute_clusters(self, curves, clust_number=10):
+
+        """
+        Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
+        The clustering is done with the agglomerative technique using a distance matrix.
+        The distance is measured either with root mean square error (RMSE) or with dynamic time warping distance (DTW),
+        depending on the user choice.
+
+        Parameters
+        ----------
+        curves : python object
+            (REQUIRED) Returned by previous function pred_comp_all().
+
+        clust_number : integer value
+            (OPTIONAL) The number of desired clusters.
+
+        """
+
+        distance_matrix = curves.get_dm()
+
+        self.clust_number = clust_number
+
+
         #print()
         #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
         #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
@@ -467,11 +538,11 @@ class PartialDependence(object):
         #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
         self.dist_matrix = distance_matrix
         labels_array = clust.labels_
-        return labels_array
+
+        curves.write_labels(labels_array)
 
     def plot(self,
-             pred_matrix,
-             labels_clust,
+             curves_input,
              thresh = 0.5,
              local_curves = True,
              chosen_row_preds_to_plot = None):
@@ -484,11 +555,9 @@ class PartialDependence(object):
 
         Parameters
         ----------
-        pred_matrix : numpy.array of shape (num_rows, num_samples)
+        
+        curves : python object
             (REQUIRED) Returned by previous function pred_comp_all().
-
-        labels_clust : numpy.array of shape (1, num_rows)
-            (REQUIRED) Returned by previous function compute_clusters().
 
         thresh: float value
             (OPTIONAL) The threshold is displayed as a red dashed line parallel to the x-axis.
@@ -502,14 +571,18 @@ class PartialDependence(object):
 
         """
 
-        lb_keogh_bool = self.lb_keogh_bool
 
         the_feature = self.the_feature
         clust_number = self.clust_number
         class_array = self.cls_arr
         model = self.mdl
         df_test = self.df
-        dist_matrix = self.dist_matrix
+        
+        dist_matrix = curves_input.get_dm()
+        labels_clust = curves_input.get_labels()
+        pred_matrix = curves_input.get_preds()
+        rWarpedUsed = curves_input.get_keogh_radius()
+
         num_samples = self.n_smpl
         scale = self.scl
         shift = self.shft
@@ -560,7 +633,7 @@ class PartialDependence(object):
             original_data_sample = back_to_the_orginal(list(df_sample[fix]), fix)
             path = "plot_" + featLol
             #path = "plot_" + str(int(time.time()))[-3:]+"_"
-            if rWarped > 0:
+            if rWarped is not None:
                 path = path + "_warped_" + str(rWarped)
             if allClust:
                 path = path + "_all"
@@ -746,16 +819,11 @@ class PartialDependence(object):
             return data_that
 
         if not local_curves:
-            if lb_keogh_bool:
-                rWarpedUsed = self.rWarpedUsed
-                plotting_prediction_changes(pred_matrix, dist_matrix,
-                                            the_feature, labels_clust,
-                                            clust_number, rWarped=rWarpedUsed,
-                                            allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
-            else:
-                plotting_prediction_changes(pred_matrix, dist_matrix, the_feature,
-                                            labels_clust, clust_number, rWarped=0,
-                                            allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
+            plotting_prediction_changes(pred_matrix, dist_matrix,
+                                        the_feature, labels_clust,
+                                        clust_number, rWarped=rWarpedUsed,
+                                        allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
+
         else:
             originalIndex = int(num_samples / 2)
             howFarIndex = 2
@@ -768,10 +836,6 @@ class PartialDependence(object):
             for key in allSamples:
                 allSamplesOriginal[key] = back_to_the_orginal(allSamples[key], key.split("-o-")[0])
 
-            if lb_keogh_bool:
-                rWarpedUsed = self.rWarpedUsed
-                plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
-                    clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local, chosen_row_preds = chosen_row_preds_to_plot)
-            else:
-                plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
-                    clust_number, rWarped=0, allClust=False, spag=True, pred_spag=preds_local ,chosen_row_preds = chosen_row_preds_to_plot)
+            plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
+                clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local, chosen_row_preds = chosen_row_preds_to_plot)
+

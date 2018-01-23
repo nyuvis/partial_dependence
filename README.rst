@@ -106,20 +106,23 @@ By feeding ``the_matrix`` to ``pred_comp_all()`` we are able to compute predicti
 
 .. code:: python
 
-	preds = my_pdp_plot.pred_comp_all( the_matrix )
+	curves = my_pdp_plot.pred_comp_all( the_matrix )
 
-In ``preds``, a ``numpy.array`` of shape ``(num_rows,num_samples)``, we have for each element a prediction linked to an original instance of the test-set and a precise sample of the ``chosen_feature``.
+In ``curves``, an itialized python ``object`` from the class ``PdpCurves``.
+Within we store for now just a ``numpy.array`` of shape ``(num_rows,num_samples)``.
+For each element of this matrix we have a prediction linked to an original instance of the test-set and a precise sample of the ``chosen_feature``.
 
 Clustering the partial dependence
 #################################
 
-To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide the computed predictions series ``preds``.
+To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide ``curves``.
 
-The function will return a ``numpy.array`` with size equal to the size of the test-set. Each element reports an integer cluster label relative to the instance with same index in the test-set. 
+The function will store in ``curves.labels_cluster`` a ``numpy.array`` with size equal to the size of the test-set. 
+Each element reports an integer cluster label relative to the instance with same index in the test-set.
 
 .. code:: python
 
-	labels_clusters = my_pdp_plot.compute_clusters( preds, chosen_cluster_number )
+	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 
 Plotting the results
@@ -130,7 +133,7 @@ The visualization is automatically saved in a png file in the same folder of the
 
 .. code:: python
 
-	my_pdp_plot.plot( preds, labels_clusters )
+	my_pdp_plot.plot( curves, labels_clusters )
 
 .. image:: plot_alcohol_for_rst.png
     :width: 750px
@@ -151,25 +154,29 @@ To do so, just set the optional argument ``batch_size`` to the desired integer n
 
 .. code:: python
 
-	preds = my_pdp_plot.pred_comp_all( the_matrix, batch_size = 1000 )
+	curves = my_pdp_plot.pred_comp_all( the_matrix, batch_size = 1000 )
 
 Clustering with DTW distance
 ############################
 
 To cluster together the partial dependence plots, we measure the distance among each pair.
 By default this distance is measured with RMSE.
-By using the optional argument ``lb_keogh_bool``, you can use `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_ distance, an approximation of Dynamic Time Warping (DTW) distance.
+Another option is `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_  distance, an approximation of Dynamic Time Warping (DTW) distance.
+By setting the ``curves.r_param`` parameter of the formula to a value different from ``None``, you are able to compute the clustering with the LB Keogh.
+The method ``get_optimal_keogh_radius()`` gives you a quick way to automatically compute an optimal value for ``curves.r_param``.
+To set the distance back to RMSE just set ``curves.set_keogh_radius(None)`` before recomputing the clustering.
 
 .. code:: python
 
-	labels_clusters = my_pdp_plot.compute_clusters( preds, chosen_cluster_number, lb_keogh_bool = True )
+	curves.set_keogh_radius( wine_pdp_plot.get_optimal_keogh_radius() )
+	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 Data points representations
 ###########################
 
 .. code:: python
 
-	my_pdp_plot.plot( preds, labels_clusters, local_curves = False )
+	my_pdp_plot.plot( curves, local_curves = False )
 
 .. image:: plot_alcohol_warped_3_for_rst.png
     :width: 750px
@@ -180,17 +187,17 @@ Data points representations
 Highlighting a Custom Vector
 ###########################
 
-In case you want to highligh a particular vector partial dependence to compare with the clusters, this is how it works..
+In case you want to highlight a particular vector partial dependence to compare with the clusters, this is how it works..
 
 .. code:: python
 
 	the_matrix, custom_vectors = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
 
-	preds,custom_preds = my_pdp_plot.pred_comp_all( the_matrix, chosen_row_alterations = custom_vectors )
+	curves, custom_preds = my_pdp_plot.pred_comp_all( the_matrix, chosen_row_alterations = custom_vectors )
 
-	labels_clusters = my_pdp_plot.compute_clusters( preds, chosen_cluster_number )
+	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
-	my_pdp_plot.plot( preds, labels_clusters, local_curves = False,
+	my_pdp_plot.plot( curves, local_curves = False,
 	                   chosen_row_preds_to_plot = custom_preds )
 
 .. image:: plot_alcohol_highlight_vect_for_rst.png
