@@ -73,10 +73,38 @@ class PdpCurves(object):
 
     def __init__(self, preds):
         self._preds = preds
+        self._ixs = np.arange(self._preds.shape[0])
+
         self._dm = None
         self.r_param = None
 
         self.labels_cluster = None
+
+
+    def copy(self):
+        return self.__copy__()
+
+    def __copy__(self):
+      res = type(self)(self._preds)
+      res.__dict__.update(self.__dict__)
+      return res
+
+    def split(self):
+        if self.labels_cluster is None:
+            return [ (None, self.copy()) ]
+
+        def get_slice(c, lbl):
+            c._preds = self._preds[self.labels_cluster == lbl, :]
+            if self._dm is not None:
+                c._dm = self._dm[self.labels_cluster == lbl, :][:, self.labels_cluster == lbl]
+            c._ixs = self._ixs[self.labels_cluster == lbl]
+            c.labels_cluster = None
+            return c
+
+        list_of_clusters = np.unique(self.labels_cluster)
+        return [ (lbl, get_slice(self.copy(), lbl)) for lbl in list_of_clusters ]
+    def get_ixs(self):
+        return self._ixs
 
     def write_labels(self,labels_array):
         self.labels_cluster = labels_array
@@ -526,7 +554,6 @@ class PartialDependence(object):
 
         distance_matrix = curves.get_dm()
 
-        self.clust_number = clust_number
 
 
         #print()
@@ -545,7 +572,8 @@ class PartialDependence(object):
              curves_input,
              thresh = 0.5,
              local_curves = True,
-             chosen_row_preds_to_plot = None):
+             chosen_row_preds_to_plot = None,
+             plot_full_curves = False):
 
         """
         Porduces the visualization printing it in a .png file in the current path.
@@ -570,10 +598,13 @@ class PartialDependence(object):
             Such values will be displayed as red curve in the plot.
 
         """
-
+        single_cluter = False
+        if type(curves_input) == tuple:
+            single_cluter = True
+            label_title_cluster = curves_input[0]
+            curves_input = curves_input[1]
 
         the_feature = self.the_feature
-        clust_number = self.clust_number
         class_array = self.cls_arr
         model = self.mdl
         df_test = self.df
@@ -582,13 +613,20 @@ class PartialDependence(object):
         labels_clust = curves_input.get_labels()
         pred_matrix = curves_input.get_preds()
         rWarpedUsed = curves_input.get_keogh_radius()
+        indices_from_test = curves_input.get_ixs()
+
+        if labels_clust is not None:
+            clust_number = len(np.unique(labels_clust))
+        else:
+            clust_number = None
 
         num_samples = self.n_smpl
         scale = self.scl
         shift = self.shft
 
         def plotting_prediction_changes(pred_matrix, dist_matrix, fix, 
-            labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None, chosen_row_preds = chosen_row_preds_to_plot):
+            labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None, chosen_row_preds = None, full_curves = False):
+
                 
             def b_spline(x,y):
                 n_local_points = len(x)
@@ -619,16 +657,12 @@ class PartialDependence(object):
             df_sample = self.df_sample
             df_features = self.df_features
 
-            trasparenza = 1
+            trasparenza = 0.1
             dot_size = 5
 
             #cmap = plt.get_cmap("gist_rainbow")
             #cmap = plt.get_cmap("RdYlBu")
             # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
-
-            colors_10_cluster = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
-                                 '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
-            colors_10_cluster = colors_10_cluster[1::2] + colors_10_cluster[::2]           
             featLol = fix
             original_data_sample = back_to_the_orginal(list(df_sample[fix]), fix)
             path = "plot_" + featLol
@@ -641,79 +675,113 @@ class PartialDependence(object):
             #t = time.time()
             num_rows = len(pred_matrix)
             fig, ax = plt.subplots(figsize=(16, 9), dpi=300)
-            plt.title("1D partial dependency of "+featLol, fontsize=20)
+            if not single_cluter:
+                plt.title("1D partial dependency of "+featLol, fontsize=20)
+            else:
+                plt.title("1D partial dependency of "+featLol+" for cluster "+ str(label_title_cluster), fontsize=20)
+
             
-            clusters = np.array(range(clust_number)) / float(clust_number)
+            if labels_clust is not None:
+
+
+                colors_10_cluster = ['#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c',
+                                     '#fdbf6f','#ff7f00','#cab2d6','#6a3d9a']
+                colors_10_cluster = colors_10_cluster[1::2] + colors_10_cluster[::2]           
             
-            texts1 = []
-            texts2 = []
-            sizeClusts =[]
-            all_indexes_in_cluster = {}
-            for i in range(clust_number):
-                all_indexes_in_cluster[i] = [ idI for idI in range(num_rows) if labels_clust[idI] == i ]
+                #clusters = np.array(range(clust_number)) / float(clust_number)
+            
+                texts1 = []
+                texts2 = []
+                sizeClusts =[]
+                all_indexes_in_cluster = {}
+                for i in range(clust_number):
+                    all_indexes_in_cluster[i] = [ idI for idI in range(num_rows) if labels_clust[idI] == i ]
+                    
+                    #colors_labs.append(cmap(clusters[i]))
+                    is_index = []
+                    js_index = []
+                    for comb in combinations(all_indexes_in_cluster[i], 2):
+                        is_index.append(comb[0])
+                        js_index.append(comb[1])
+                    if len(all_indexes_in_cluster[i]) == 1:
+                        avgRmse = 0
+                    else:
+                        avgRmse = np.round(np.mean(dist_matrix[is_index, js_index]), decimals=3)
+                    sizeClust = len(all_indexes_in_cluster[i])
+                    sizeClusts.append(sizeClust)
+                    texts1.append("#" + str(i) + " - avg dist: " + str(avgRmse))
+                    texts2.append("#" + str(i) + " - size: " + str(sizeClust))
+
+                the_index_to_use = [ x for (_, x) in sorted(zip(sizeClusts, range(clust_number)), reverse=True) ]
+                colors_10_cluster = [ x for (_, x) in sorted(zip(the_index_to_use, colors_10_cluster), reverse=False) ]
+                patches1 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=colors_10_cluster[i], 
+                        label="{:s}".format(texts1[i]))[0] for i in the_index_to_use ]
+                patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=colors_10_cluster[i], 
+                        label="{:s}".format(texts2[i]))[0] for i in the_index_to_use ] 
                 
-                #colors_labs.append(cmap(clusters[i]))
-                is_index = []
-                js_index = []
-                for comb in combinations(all_indexes_in_cluster[i], 2):
-                    is_index.append(comb[0])
-                    js_index.append(comb[1])
-                if len(all_indexes_in_cluster[i]) == 1:
-                    avgRmse = 0
-                else:
-                    avgRmse = np.round(np.mean(dist_matrix[is_index, js_index]), decimals=3)
-                sizeClust = len(all_indexes_in_cluster[i])
-                sizeClusts.append(sizeClust)
-                texts1.append("#" + str(i) + " - avg dist: " + str(avgRmse))
-                texts2.append("#" + str(i) + " - size: " + str(sizeClust))
+                legend1 = plt.legend(handles=patches1, bbox_to_anchor=(1.04, 1),
+                                     loc="upper left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
+                legend2 = plt.legend(handles=patches2, bbox_to_anchor=(1.04, 0),
+                                     loc="lower left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
+                
+                ax.add_artist(legend1)
+                ax.add_artist(legend2)
+                
+                #for i in range(num_rows):
+                    #if float(i+1)%1000==0:
+                        #print ("---- loading plot: ", np.round(i/float(num_rows),decimals=2)*100,"%")
+                        #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+                    #plt.plot(df_sample[fix],pred_matrix[i],color=colors_10_cluster[labels_clust[i]],alpha=trasparenza)
+                    #plt.plot(df_sample[fix],pred_matrix[i],color=cmap(clusters[labels_clust[i]]),alpha=trasparenza)
 
-            the_index_to_use = [ x for (_, x) in sorted(zip(sizeClusts, range(clust_number)), reverse=True) ]
-            colors_10_cluster = [ x for (_, x) in sorted(zip(the_index_to_use, colors_10_cluster), reverse=False) ]
-            patches1 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=colors_10_cluster[i], 
-                    label="{:s}".format(texts1[i]))[0] for i in the_index_to_use ]
-            patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=colors_10_cluster[i], 
-                    label="{:s}".format(texts2[i]))[0] for i in the_index_to_use ] 
             
-            legend1 = plt.legend(handles=patches1, bbox_to_anchor=(1.04, 1),
-                                 loc="upper left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            legend2 = plt.legend(handles=patches2, bbox_to_anchor=(1.04, 0),
-                                 loc="lower left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            
-            ax.add_artist(legend1)
-            ax.add_artist(legend2)
-            #for i in range(num_rows):
-                #if float(i+1)%1000==0:
-                    #print ("---- loading plot: ", np.round(i/float(num_rows),decimals=2)*100,"%")
-                    #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
-                #plt.plot(df_sample[fix],pred_matrix[i],color=colors_10_cluster[labels_clust[i]],alpha=trasparenza)
-                #plt.plot(df_sample[fix],pred_matrix[i],color=cmap(clusters[labels_clust[i]]),alpha=trasparenza)
-            mean_preds = np.array([ np.mean(pred_matrix[:, i]) for i in range(num_samples) ])
-            std_preds = np.array([ np.std(pred_matrix[:, i]) for i in range(num_samples) ])
-            
-            for i in range(clust_number):
-                if not spag:  
-                    x_point = changing_rows[all_indexes_in_cluster[i], dictLabtoIndex[fix]]
-                    x_point = back_to_the_orginal(x_point, fix)
-                    y_point = original_preds[all_indexes_in_cluster[i]] 
-                    plt.scatter(x_point, y_point, c=colors_10_cluster[i], s=dot_size)
+                for i in range(clust_number):
+                    if not spag:  
+                        x_point = changing_rows[all_indexes_in_cluster[i], dictLabtoIndex[fix]]
+                        x_point = back_to_the_orginal(x_point, fix)
+                        y_point = original_preds[all_indexes_in_cluster[i]] 
+                        plt.scatter(x_point, y_point, c=colors_10_cluster[i], s=dot_size)
 
-                mean_predsNow = np.array([ np.mean(pred_matrix[all_indexes_in_cluster[i], idf]) for idf in range(num_samples) ])
-                std_predsNow = np.array([ np.std(pred_matrix[all_indexes_in_cluster[i], idf]) for idf in range(num_samples) ])
-                #ax.plot(df_sample[fix],mean_predsNow,color=colors_10_cluster[i],alpha=1)
-                ax.fill_between(original_data_sample, mean_predsNow-std_predsNow,
-                                mean_predsNow + std_predsNow, color=colors_10_cluster[i], alpha=0.25)
+                    mean_predsNow = np.array([ np.mean(pred_matrix[all_indexes_in_cluster[i], idf]) for idf in range(num_samples) ])
+                    std_predsNow = np.array([ np.std(pred_matrix[all_indexes_in_cluster[i], idf]) for idf in range(num_samples) ])
+                    #ax.plot(df_sample[fix],mean_predsNow,color=colors_10_cluster[i],alpha=1)
+                    ax.fill_between(original_data_sample, mean_predsNow-std_predsNow,
+                                    mean_predsNow + std_predsNow, color=colors_10_cluster[i], alpha=0.25)
+                    if spag:
+                        #print("plotting local_curves cluster#",i)
+                        for j in all_indexes_in_cluster[i]:
+                            #print("plotting spaghetto #",j)
+                            NowSample =allSamplesOriginal[fix + "-o-" + str(j)][originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
+                            NowPreds = pred_spag[j, originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
+                            #plt.plot(NowSample,NowPreds,alpha=trasparenza,color=colors_10_cluster[i])
+                            x_i, y_i = b_spline(np.array(NowSample), np.array(NowPreds))
+                            plt.plot(x_i, y_i, alpha=0.8, color=colors_10_cluster[i])
+            else:
+
+                if full_curves:
+                    for i in range(num_rows):
+                        plt.plot(original_data_sample,pred_matrix[i],color="blue",alpha=trasparenza)
+
                 if spag:
-                    #print("plotting local_curves cluster#",i)
-                    for j in all_indexes_in_cluster[i]:
-                        #print("plotting spaghetto #",j)
+                    for j in indices_from_test:
                         NowSample =allSamplesOriginal[fix + "-o-" + str(j)][originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
                         NowPreds = pred_spag[j, originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
                         #plt.plot(NowSample,NowPreds,alpha=trasparenza,color=colors_10_cluster[i])
                         x_i, y_i = b_spline(np.array(NowSample), np.array(NowPreds))
-                        plt.plot(x_i, y_i, alpha=0.8, color=colors_10_cluster[i])
-            #plt.plot(df_sample[fix],mean_preds,color="red",alpha=1)
-            #plt.fill_between(df_sample[fix], mean_preds-std_preds, mean_preds+std_preds,color="green",alpha=0.25)
-            
+                        plt.plot(x_i, y_i, alpha=0.8, color="black")
+
+                else:
+                    x_point = changing_rows[indices_from_test, dictLabtoIndex[fix]]
+                    x_point = back_to_the_orginal(x_point, fix)
+                    y_point = original_preds[indices_from_test]
+                    plt.scatter(x_point, y_point, c="black", s=dot_size)
+
+                if not full_curves:
+                    mean_preds = np.array([ np.mean(pred_matrix[:, i]) for i in range(num_samples) ])
+                    std_preds = np.array([ np.std(pred_matrix[:, i]) for i in range(num_samples) ])
+                    plt.plot(original_data_sample,mean_preds,color="red",alpha=1)
+                    plt.fill_between(original_data_sample, mean_preds-std_preds, mean_preds+std_preds,color="green",alpha=0.25)
+                
             if chosen_row_preds is not None:
                 plt.plot(original_data_sample,chosen_row_preds,color="red",lw=2)
 
@@ -729,6 +797,7 @@ class PartialDependence(object):
             ax.text(-0.09, 0.05, class_array[1 - data_set_pred_index], fontsize=20, transform=ax.transAxes)
             #pred = 1
             ax.text(-0.09, 0.95, class_array[data_set_pred_index], fontsize=20, transform=ax.transAxes)
+
             # no sides
             #plt.tight_layout()
             # only right side
@@ -822,7 +891,7 @@ class PartialDependence(object):
             plotting_prediction_changes(pred_matrix, dist_matrix,
                                         the_feature, labels_clust,
                                         clust_number, rWarped=rWarpedUsed,
-                                        allClust=False, chosen_row_preds = chosen_row_preds_to_plot)
+                                        allClust=False, chosen_row_preds = chosen_row_preds_to_plot, full_curves = plot_full_curves)
 
         else:
             originalIndex = int(num_samples / 2)
@@ -837,5 +906,5 @@ class PartialDependence(object):
                 allSamplesOriginal[key] = back_to_the_orginal(allSamples[key], key.split("-o-")[0])
 
             plotting_prediction_changes(pred_matrix, dist_matrix, the_feature, labels_clust,
-                clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local, chosen_row_preds = chosen_row_preds_to_plot)
+                clust_number, rWarped=rWarpedUsed, allClust=False, spag=True, pred_spag=preds_local, chosen_row_preds = chosen_row_preds_to_plot, full_curves = plot_full_curves)
 
