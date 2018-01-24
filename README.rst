@@ -133,7 +133,7 @@ The visualization is automatically saved in a png file in the same folder of the
 
 .. code:: python
 
-	my_pdp_plot.plot( curves, labels_clusters )
+	my_pdp_plot.plot( curves )
 
 .. image:: plot_alcohol_for_rst.png
     :width: 750px
