@@ -328,7 +328,7 @@ class PartialDependence(object):
         self.df_features = df_features
         self.de_norm_bool = de_norm_bool
         
-    def pdp(self, fix, chosen_row=None):
+    def pdp(self, fix, chosen_row=None,batch_size=0):
 
         """
         Produces for each instance the test-set num_samples different versions.
@@ -341,20 +341,30 @@ class PartialDependence(object):
             (REQUIRED) The name of feature as reported in one of the df_test columns.
        
         chosen_row : numpy.array of shape (1,num_feat)
-            (OPTIONAL) A custom row, defined by the user, used to test or compare the results.
+            (OPTIONAL) [default = None] A custom row, defined by the user, used to test or compare the results.
             For example you could insert a row with mean values in each feature.
+
+        batch_size: integer value
+            (OPTIONAL) [default = 0] The batch size is required when the size ( num_rows X num_samples X num_feat ) becomes too large.
+            In this case you might want to compute the predictions in chunks of size batch_size, to not run out of memory.
+            If batch_size = 0, then predictions are computed with a single call of model.predict_proba().
+            Otherwise the number of calls is automatically computed and it will depend on the user-defined batch_size parameter.
+            In order to not split up predictions relative to a same instance in different chunks, 
+            batch_size must be greater or equale to num_samples.
 
         Returns
         -------
-        new_matrix_f: numpy.array of shape (num_rows, num_samples, num_feat)
-            (ALWAYS) It contains all the different versions obtained from the original test instances by changing the feature fix in the sample.
+        curves_returned: python object
+            (ALWAYS) An itialized object from the class PdpCurves.
+            It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
 
-        chosen_row_alterations: numpy.array of shape (num_samples, num_feat)
-            (IF REQUESTED) If chosen_row was defined by the user, we also return this matrix, otherwise just new_matrix_f is returned.
-            It contains all the different versions obtained from the custom chosen_row by changing the feature fix in the sample.           
+        chosen_row_preds: numpy.array of shape (1, num_samples)
+            (IF REQUESTED) If chosen_row_alterations was supplied by the user, we also return this array, otherwise just pred_matrix is returned.
+            It contains all the different predictions obtained from the different versions of custom chosen_row, stored in chosen_row_alterations.          
+
 
         """
-
+            
         #t = time.time()
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -363,6 +373,94 @@ class PartialDependence(object):
         num_samples = self.n_smpl
         
         self.the_feature = fix
+
+        
+        def pred_comp_all(self, matrix_changed_rows, chosen_row_alterations_input=None, batch_size_input=0):
+            
+
+            model = self.mdl
+            #num_samples = self.n_smpl
+
+            def compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct=None):
+                #t = time.time()
+                #num_feat = self.num_feat
+                data_set_pred_index = self.data_set_pred_index
+
+                num_rows= len(matrix_changed_rows)
+                pred_matrix = np.zeros((num_rows, num_samples))
+                matrix_changed_rows = matrix_changed_rows.reshape((num_rows * num_samples, num_feat))
+                ps = model.predict_proba(matrix_changed_rows)
+                ps = [ x[data_set_pred_index] for x in ps ]
+                k = 0
+                for i in range(0, num_rows * num_samples):
+                    if i % num_samples == 0:
+                        pred_matrix[k] = ps[i:i + num_samples]
+                        k += 1
+
+                curves_returned = PdpCurves(pred_matrix)
+
+                if chosen_row_alterations_sub_funct is not None:
+                    chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
+                    chosen_row_preds = np.array([ x[data_set_pred_index] for x in chosen_row_preds ])
+                    return curves_returned, chosen_row_preds
+                return curves_returned
+
+
+            def compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch, chosen_row_alterations_sub_funct=None):
+                if number_all_preds_in_batch < num_samples:
+                    print ("Error: batch size cannot be less than sample size.")
+                    return np.nan
+                #t = time.time()
+                num_feat = self.num_feat
+                data_set_pred_index = self.data_set_pred_index
+
+                num_rows= len(matrix_changed_rows)
+                pred_matrix = np.zeros((num_rows, num_samples))
+
+                #number_all_preds_in_batch = 1000
+
+                num_of_instances_in_batch = int( np.floor( number_all_preds_in_batch / num_samples ) )
+                how_many_calls = int( np.ceil( num_rows / num_of_instances_in_batch ) )
+                residual = num_of_instances_in_batch * how_many_calls - num_rows
+                num_of_instances_in_last_batch = num_of_instances_in_batch - residual
+
+                #print ("num_of_instances_in_batch"  ,  num_of_instances_in_batch)
+                #print ( "how_many_calls" , how_many_calls )
+                #print ( "residual" , residual )
+                #print ( "num_of_instances_in_last_batch" , num_of_instances_in_last_batch )
+
+
+                for i in range(0, how_many_calls):
+                    #if float(i+1)%1000==0:
+                        #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
+                        #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+
+
+                    low_bound_index = i*num_of_instances_in_batch
+                    high_bound_index = low_bound_index + num_of_instances_in_batch
+
+                    if i == how_many_calls -1 and residual != 0:
+                        high_bound_index = low_bound_index + num_of_instances_in_last_batch
+
+                    matrix_batch = matrix_changed_rows[low_bound_index:high_bound_index]
+
+                    pred_matrix_batch = compute_pred(self,matrix_batch)
+
+                    pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
+
+                curves_returned = PdpCurves(pred_matrix)
+
+                if chosen_row_alterations_sub_funct is not None:
+                    chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
+                    chosen_row_preds = np.array([x[data_set_pred_index] for x in chosen_row_preds])
+                    return curves_returned, chosen_row_preds
+                return curves_returned
+
+            if batch_size_input != 0:
+                return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size_input, 
+                    chosen_row_alterations_sub_funct = chosen_row_alterations_input)
+            return compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct = chosen_row_alterations_input)
+
 
         num_rows = len(rows)
         new_matrix_f = np.zeros((num_rows, num_samples, num_feat))
@@ -388,130 +486,16 @@ class PartialDependence(object):
             
             chosen_row_alterations = np.array(chosen_row_alterations)
 
-            return new_matrix_f, chosen_row_alterations
-        return new_matrix_f
-        
-    def pred_comp_all(self, matrix_changed_rows, chosen_row_alterations=None, batch_size=0):
+            return pred_comp_all(
+                self, 
+                new_matrix_f, 
+                chosen_row_alterations_input=chosen_row_alterations,
+                batch_size_input=batch_size)
 
-
-        """
-        Produces for each instance the test-set num_samples different predictions.
-        Each predictions is relative to a different version of the orginal istance.
-        A version varies just just by the feature fix, which changes within the sample df_sample[fix].
-        All the other features values remain the same.
-
-        Parameters
-        ----------
-        matrix_changed_rows : numpy.array of shape (num_rows, num_samples, num_feat)
-            (REQUIRED) Returned by previous function pdp().
-
-        chosen_row_alterations : numpy.array of shape (num_samples, num_feat)
-            (OPTIONAL) Returned by previous function pdp().
-
-        batch_size: integer value
-            (OPTIONAL) The batch size is required when the size ( num_rows X num_samples X num_feat ) becomes too large.
-            In this case you might want to compute the predictions in chunks of size batch_size, to not run out of memory.
-            If batch_size = 0, then predictions are computed with a single call of model.predict_proba().
-            Otherwise the number of calls is automatically computed and it will depend on the user-defined batch_size parameter.
-            In order to not split up predictions relative to a same instance in different chunks, 
-            batch_size must be greater or equale to num_samples.
-
-        Returns
-        -------
-        curves_returned: python object
-            (ALWAYS) An itialized object from the class PdpCurves.
-            It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
-
-        chosen_row_preds: numpy.array of shape (1, num_samples)
-            (IF REQUESTED) If chosen_row_alterations was supplied by the user, we also return this array, otherwise just pred_matrix is returned.
-            It contains all the different predictions obtained from the different versions of custom chosen_row, stored in chosen_row_alterations.          
-
-
-        """
-        
-
-        model = self.mdl
-        num_samples = self.n_smpl
-
-        def compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct=None):
-            #t = time.time()
-            num_feat = self.num_feat
-            data_set_pred_index = self.data_set_pred_index
-
-            num_rows= len(matrix_changed_rows)
-            pred_matrix = np.zeros((num_rows, num_samples))
-            matrix_changed_rows = matrix_changed_rows.reshape((num_rows * num_samples, num_feat))
-            ps = model.predict_proba(matrix_changed_rows)
-            ps = [ x[data_set_pred_index] for x in ps ]
-            k = 0
-            for i in range(0, num_rows * num_samples):
-                if i % num_samples == 0:
-                    pred_matrix[k] = ps[i:i + num_samples]
-                    k += 1
-
-            curves_returned = PdpCurves(pred_matrix)
-
-            if chosen_row_alterations_sub_funct is not None:
-                chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
-                chosen_row_preds = np.array([ x[data_set_pred_index] for x in chosen_row_preds ])
-                return curves_returned, chosen_row_preds
-            return curves_returned
-
-
-        def compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch, chosen_row_alterations_sub_funct=None):
-            if number_all_preds_in_batch < num_samples:
-                print ("Error: batch size cannot be less than sample size.")
-                return np.nan
-            #t = time.time()
-            num_feat = self.num_feat
-            data_set_pred_index = self.data_set_pred_index
-
-            num_rows= len(matrix_changed_rows)
-            pred_matrix = np.zeros((num_rows, num_samples))
-
-            #number_all_preds_in_batch = 1000
-
-            num_of_instances_in_batch = int( np.floor( number_all_preds_in_batch / num_samples ) )
-            how_many_calls = int( np.ceil( num_rows / num_of_instances_in_batch ) )
-            residual = num_of_instances_in_batch * how_many_calls - num_rows
-            num_of_instances_in_last_batch = num_of_instances_in_batch - residual
-
-            #print ("num_of_instances_in_batch"  ,  num_of_instances_in_batch)
-            #print ( "how_many_calls" , how_many_calls )
-            #print ( "residual" , residual )
-            #print ( "num_of_instances_in_last_batch" , num_of_instances_in_last_batch )
-
-
-            for i in range(0, how_many_calls):
-                #if float(i+1)%1000==0:
-                    #print ("---- loading preds: ", np.round(i/float(num_rows),decimals=4)*100,"%")
-                    #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
-
-
-                low_bound_index = i*num_of_instances_in_batch
-                high_bound_index = low_bound_index + num_of_instances_in_batch
-
-                if i == how_many_calls -1 and residual != 0:
-                    high_bound_index = low_bound_index + num_of_instances_in_last_batch
-
-                matrix_batch = matrix_changed_rows[low_bound_index:high_bound_index]
-
-                pred_matrix_batch = compute_pred(self,matrix_batch)
-
-                pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
-
-            curves_returned = PdpCurves(pred_matrix)
-
-            if chosen_row_alterations_sub_funct is not None:
-                chosen_row_preds = model.predict_proba(chosen_row_alterations_sub_funct)
-                chosen_row_preds = np.array([x[data_set_pred_index] for x in chosen_row_preds])
-                return curves_returned, chosen_row_preds
-            return curves_returned
-
-        if batch_size != 0:
-            return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size, 
-                chosen_row_alterations_sub_funct = chosen_row_alterations)
-        return compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct = chosen_row_alterations)
+        return pred_comp_all(
+            self, 
+            new_matrix_f,
+            batch_size_input=batch_size)
 
     def get_optimal_keogh_radius(self):
 
@@ -548,7 +532,7 @@ class PartialDependence(object):
             (REQUIRED) Returned by previous function pred_comp_all().
 
         clust_number : integer value
-            (OPTIONAL) The number of desired clusters.
+            (OPTIONAL) [default = 10] The number of desired clusters.
 
         """
 
@@ -585,17 +569,20 @@ class PartialDependence(object):
         ----------
         
         curves : python object
-            (REQUIRED) Returned by previous function pred_comp_all().
+            (REQUIRED) Returned by previous function pdp().
 
         thresh: float value
-            (OPTIONAL) The threshold is displayed as a red dashed line parallel to the x-axis.
+            (OPTIONAL) [default = 0.5]  The threshold is displayed as a red dashed line parallel to the x-axis.
 
         local_curves: boolean value
-            (OPTIONAL) If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
+            (OPTIONAL) [default = True] If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
 
         chosen_row_preds_to_plot: numpy.array of shape (1, num_samples)
-            (OPTIONAL) Returned by previous function pred_comp_all().
+            (OPTIONAL) [default = None] Returned by previous function pdp().
             Such values will be displayed as red curve in the plot.
+
+        plot_full_curves: boolean value
+            (OPTIONAL) [default = False]
 
         """
         single_cluter = False
@@ -624,8 +611,11 @@ class PartialDependence(object):
         scale = self.scl
         shift = self.shft
 
-        def plotting_prediction_changes(pred_matrix, dist_matrix, fix, 
-            labels_clust, clust_number, rWarped, allClust, spag = False, pred_spag = None, chosen_row_preds = None, full_curves = False):
+        def plotting_prediction_changes(
+                pred_matrix, dist_matrix, fix, 
+                labels_clust, clust_number, rWarped, 
+                allClust, spag = False, pred_spag = None, 
+                chosen_row_preds = None, full_curves = False):
 
                 
             def b_spline(x,y):
