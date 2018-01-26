@@ -21,6 +21,8 @@ from itertools import combinations
 from sklearn.cluster import AgglomerativeClustering
 import scipy.interpolate as si
 import sys
+from matplotlib.legend import Legend
+
 
 
 try:
@@ -559,8 +561,9 @@ class PartialDependence(object):
              local_curves = True,
              chosen_row_preds_to_plot = None,
              plot_full_curves = False,
-             plot_object = None,
-             saved_legend = None):
+             plot_object = None):
+
+
 
         """
         Porduces the visualization printing it in a .png file in the current path.
@@ -609,6 +612,8 @@ class PartialDependence(object):
                 plot_object = None,
                 ticks_color = "black"):
 
+
+
             dist_matrix = single_curve_object.get_dm()
             pred_matrix = single_curve_object.get_preds()
             rWarped = single_curve_object.get_keogh_radius()
@@ -616,8 +621,11 @@ class PartialDependence(object):
 
             if plot_object is not None:
                 ax = plot_object
+
             else:
-                fig, ax = plt.subplots(figsize=(16, 9), dpi=300)
+                fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+
+
 
 
 
@@ -744,12 +752,15 @@ class PartialDependence(object):
                     new_matrix_f[depth_index][index_height] = new_r
                     index_height += 1
                 depth_index += 1
+
             if chosen_row is not None:
                 chosen_row_alterations = []
+
                 for v in sample_vals:
                     arow = np.copy(chosen_row)
                     arow[dictLabtoIndex[fix]] = v
                     chosen_row_alterations.append(arow)
+
                 return new_matrix_f, np.array(chosen_row_alterations), allSamples
             return new_matrix_f, allSamples
 
@@ -814,6 +825,14 @@ class PartialDependence(object):
             fig, ax = plt.subplots(figsize=(16, 9), dpi=300)
         else:
             ax = plot_object
+            old_label = ax.get_legend_handles_labels()
+            handles = old_label[0]
+            labels = old_label[1]
+            old_text1 = labels[::2]
+            old_text2 = labels[1::2]
+            old_patches1 = handles[::2]
+            old_patches2 = handles[1::2]
+
         preds_local = None
 
         if local_curves:
@@ -860,8 +879,8 @@ class PartialDependence(object):
                     avgRmse = 0
                 else:
                     avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
-                texts1.append("#" + str(label_title_cluster) + " - avg dist: " + str(avgRmse))
-                texts2.append("#" + str(label_title_cluster) + " - size: " + str(sizeClust))
+                texts1.append("Clust. " + str(label_title_cluster) + " : " + str(avgRmse))
+                texts2.append("Clust. " + str(label_title_cluster) + " : " + str(sizeClust))
                 color_legend.append(color_plot[i])
 
                 plotting_prediction_changes(
@@ -896,12 +915,12 @@ class PartialDependence(object):
                 avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
 
             if single_cluter:
-                string_legend = "#" + str(label_title_cluster) + " - "
+                string_legend = "Clust. " + str(label_title_cluster) + " : "
             else:
                 string_legend = ""
 
-            texts1.append(string_legend + "avg dist: " + str(avgRmse))
-            texts2.append(string_legend +  "size: " + str(sizeClust))
+            texts1.append(string_legend + str(avgRmse))
+            texts2.append(string_legend + str(sizeClust))
             color_legend.append(color_plot)
 
             plotting_prediction_changes(single_curve_object = single_curve, 
@@ -925,24 +944,33 @@ class PartialDependence(object):
         patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
                 label="{:s}".format(texts2[i]))[0] for i in range(size_legend) ] 
         
+        pos1 = (1.04, 1)
+        pos2 = (1.04, 0)
 
-        if saved_legend is not None:
-            
-            if len(saved_legend.keys()) != 0:
-                patches1 = saved_legend["saved_legend_1"] + patches1
-                patches2 = saved_legend["saved_legend_2"] + patches2
 
-            legend1 = plt.legend(handles=patches1, bbox_to_anchor=(1.04, 1),
-                                 loc="upper left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            legend2 = plt.legend(handles=patches2, bbox_to_anchor=(1.04, 0),
-                                 loc="lower left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            dict_legend = {}
-            dict_legend["avg_dist"] = legend1
-            dict_legend["size_clust"] = legend2
-            dict_legend["saved_legend_1"] = patches1
-            dict_legend["saved_legend_2"] = patches2
 
-            return dict_legend
+        if plot_object is not None:
+            patches1 = old_patches1 + patches1
+            patches2 = old_patches2 + patches2
+            texts1 = old_text1 + texts1
+            texts2 = old_text2 + texts2
+
+        ax.legend( handles=patches1, bbox_to_anchor=pos1, 
+                   loc="upper left", ncol=1, 
+                   facecolor="#d3d3d3", numpoints=1, 
+                   fontsize=13,frameon=False,
+                   title = "Average Distance" )
+
+
+        legend2 = Legend( ax, labels=texts2, handles=patches2, bbox_to_anchor=pos2,
+                          loc="lower left", ncol=1, facecolor="#d3d3d3", 
+                          numpoints=1, fontsize=13,frameon=False,
+                          title = "# of Instances")
+
+        for art in ax.artists:
+            art.remove()
+
+        ax.add_artist(legend2)
 
         # no sides
         #plt.tight_layout()
@@ -958,14 +986,7 @@ class PartialDependence(object):
 
 
         if end_plot:
-            
-            legend1 = plt.legend(handles=patches1, bbox_to_anchor=(1.04, 1),
-                                 loc="upper left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            legend2 = plt.legend(handles=patches2, bbox_to_anchor=(1.04, 0),
-                                 loc="lower left", ncol=1, facecolor="#d3d3d3", numpoints=1, fontsize=13)
-            
-            ax.add_artist(legend1)
-            ax.add_artist(legend2)
+
 
             path = "plot_" + fix + ".png"
 
