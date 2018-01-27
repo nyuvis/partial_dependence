@@ -917,7 +917,7 @@ class PartialDependence(object):
             if single_cluter:
                 string_legend = "Clust. " + str(label_title_cluster) + " : "
             else:
-                string_legend = ""
+                string_legend = " : "
 
             texts1.append(string_legend + str(avgRmse))
             texts2.append(string_legend + str(sizeClust))
@@ -941,6 +941,7 @@ class PartialDependence(object):
 
         patches1 = [ plt.plot([],  [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
                 label="{:s}".format(texts1[i]))[0] for i in range(size_legend) ]
+
         patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
                 label="{:s}".format(texts2[i]))[0] for i in range(size_legend) ] 
         
@@ -954,6 +955,21 @@ class PartialDependence(object):
             patches2 = old_patches2 + patches2
             texts1 = old_text1 + texts1
             texts2 = old_text2 + texts2
+
+        vals_texts_1 = [ float(v.split(" : ")[1]) for v in texts1 ]
+        vals_texts_2 = [ float(v.split(" : ")[1]) for v in texts2 ]
+
+
+        zipped1 = sorted(zip(vals_texts_1,texts1,patches1), reverse = False)
+        zipped2 = sorted(zip(vals_texts_2,texts2,patches2), reverse = True)
+
+        texts1 = [t[1] for t in zipped1]
+
+        patches1 = [t[2] for t in zipped1]
+
+        texts2 = [t[1] for t in zipped2]
+
+        patches2 = [t[2] for t in zipped2]
 
         ax.legend( handles=patches1, bbox_to_anchor=pos1, 
                    loc="upper left", ncol=1, 

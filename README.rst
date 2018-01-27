@@ -28,7 +28,14 @@ Plotting clustering of partial dependence
 
 Following we will show the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
 
-You can also run the Jupyter notebook file to have a running example.
+You can also run the Jupyter notebook file to have a running example. 
+
+Given the heavy visualizations, it is recmmended to execute Jupyter with the following command:
+
+.. code:: bash
+
+	jupyter notebook --NotebookApp.iopub_data_rate_limit=10000000000
+
 
 Initialization
 ##############
@@ -80,12 +87,14 @@ do not insert any scale and shift parameters.
 
 
 
-Creating the matrix of instances vectors
-########################################
+Creating the PdpCurves object
+##############################
 
 By choosing a feature and changing it in sample range, for each row in the test-set we can create ``num_samples`` different versions of the original instance.
 
-``pdp()`` returns a 3D matrix ``numpy.array`` of shape ``(num_rows,num_samples,num_feat)`` storing all those different versions.
+We are able to compute prediction values for each of the different vectors.
+
+``pdp()`` initialize and returns a python object from the class ``PdpCurves``.
 
 
 Required argument:
@@ -96,44 +105,48 @@ Required argument:
 
 .. code:: python
 
-	the_matrix = my_pdp_plot.pdp( chosen_feature )
+	curves = my_pdp_plot.pdp( chosen_feature )
+
+Getting an overview of the partial dependence
+#############################################
+
+It is already possible to plot something with the function ``plot()``.
+
+When ever you have a ``PdpCurves`` object available, you can plot something.
+Here you can find a first example. The visualization is automatically saved in a png file in the same folder of the script.
 
 
-Computing prediction changes
-############################
-
-By feeding ``the_matrix`` to ``pred_comp_all()`` we are able to compute prediction values for each of the different vectors.
 
 .. code:: python
 
-	curves = my_pdp_plot.pred_comp_all( the_matrix )
+	my_pdp_plot.plot(curves,local_curves = True, plot_full_curves = True)
 
-In ``curves``, an itialized python ``object`` from the class ``PdpCurves``.
-Within we store for now just a ``numpy.array`` of shape ``(num_rows,num_samples)``.
-For each element of this matrix we have a prediction linked to an original instance of the test-set and a precise sample of the ``chosen_feature``.
+.. image:: full_curves_for_rst.png
+    :width: 750px
+    :align: center
+    :height: 421px
+    :alt: alternate text
 
 Clustering the partial dependence
 #################################
 
 To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide ``curves``.
 
-The function will store in ``curves.labels_cluster`` a ``numpy.array`` with size equal to the size of the test-set. 
-Each element reports an integer cluster label relative to the instance with same index in the test-set.
+The function returns a list of ``PdpCurves`` objects. Each element of the list is a different cluster.
 
 .. code:: python
 
-	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+	curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 
-Plotting the results
-####################
+Plotting the clustering results
+################################
 
 Without customization, plotting is quite straightforward.
-The visualization is automatically saved in a png file in the same folder of the script.
 
 .. code:: python
 
-	my_pdp_plot.plot( curves )
+	my_pdp_plot.plot( curves_list )
 
 .. image:: plot_alcohol_for_rst.png
     :width: 750px
