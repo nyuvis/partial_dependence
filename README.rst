@@ -30,12 +30,14 @@ Following we will show the pipeline of functions works. Please refer to the inli
 
 You can also run the Jupyter notebook file to have a running example. 
 
-Given the heavy visualizations, it is recmmended to execute Jupyter with the following command:
+Given the heavy visualizations, it is recommended to execute Jupyter with the following command:
 
 .. code:: bash
 
 	jupyter notebook --NotebookApp.iopub_data_rate_limit=10000000000
 
+The visualization we are using as example are coming from a Random Forest Model trained on the `UCI Wine Quality Data Set <https://archive.ics.uci.edu/ml/datasets/wine+quality>`_ .
+The prediction is towards the class "good wine".
 
 Initialization
 ##############
@@ -60,7 +62,7 @@ Optional arguments:
 
   ``numpy.linspace(min_value,max_value,num_samples)``
 
-  where the bounds are related to min and max value for that feature in the test-set.
+  where the bounds are related to min and max value for that feature in the test-set. Default value is 100.
 * ``scale``: scale parameter vector for normalization.
 * ``shift``: shift parameter vector for normalization.
 
@@ -72,7 +74,9 @@ you have to define scale and shift such that:
 where ``shift`` and ``scale`` are both ``numpy.array`` of shape ``(1,num_feat)``.
 
 If the model uses directly the raw data in ``df_test`` without any transformation, 
-do not insert any scale and shift parameters. 
+do not insert any scale and shift parameters.
+
+If our model does not use normalization, we can initialize the tool this way:
 
 
 .. code:: python
@@ -80,21 +84,18 @@ do not insert any scale and shift parameters.
 	my_pdp_plot = pdp_plot.PartialDependence( my_df_test,
 	                                          my_model,
 	                                          my_labels_name,
-	                                          my_labels_focus,
-	                                          my_number_of_samples,
-	                                          my_scale,
-	                                          my_shift )
+	                                          my_labels_focus )
 
 
 
 Creating the PdpCurves object
 ##############################
 
-By choosing a feature and changing it in sample range, for each row in the test-set we can create ``num_samples`` different versions of the original instance.
+By choosing a feature and changing it in the sample range, for each row in the test-set we can create ``num_samples`` different versions of the original instance.
 
-We are able to compute prediction values for each of the different vectors.
+Then we are able to compute prediction values for each of the different vectors.
 
-``pdp()`` initialize and returns a python object from the class ``PdpCurves``.
+``pdp()`` initialize and returns a python object from the class ``PdpCurves`` containing such predictions values.
 
 
 Required argument:
@@ -115,16 +116,14 @@ It is already possible to plot something with the function ``plot()``.
 When ever you have a ``PdpCurves`` object available, you can plot something.
 Here you can find a first example. The visualization is automatically saved in a png file in the same folder of the script.
 
-
-
 .. code:: python
 
 	my_pdp_plot.plot(curves,local_curves = True, plot_full_curves = True)
 
-.. image:: full_curves_for_rst.png
-    :width: 750px
+.. image:: images/full_curves.png
+    :width: 1600px
     :align: center
-    :height: 421px
+    :height: 900px
     :alt: alternate text
 
 Clustering the partial dependence
@@ -142,16 +141,16 @@ The function returns a list of ``PdpCurves`` objects. Each element of the list i
 Plotting the clustering results
 ################################
 
-Without customization, plotting is quite straightforward.
+Without customization, plotting the clustering is quite straightforward.
 
 .. code:: python
 
 	my_pdp_plot.plot( curves_list )
 
-.. image:: plot_alcohol_for_rst.png
-    :width: 750px
+.. image:: images/clustering.png
+    :width: 1600px
     :align: center
-    :height: 419px
+    :height: 900px
     :alt: alternate text
 
 
@@ -162,8 +161,8 @@ Customization and extra functions
 Computing predictions in chunks
 ###############################
 
-When using ``pred_comp_all()``, sometimes the amount of data to process is too large and it is necessary to divide it in chunks so that we don't run out of memory.
-To do so, just set the optional argument ``batch_size`` to the desired integer number. ``batch_size`` cannot be lower than ``num_samples`` defined in the initialization.
+When using ``pdp()``, sometimes the amount of data to process is too large and it is necessary to divide it in chunks so that we don't run out of memory.
+To do so, just set the optional argument ``batch_size`` to the desired integer number. ``batch_size`` cannot be lower than ``num_samples`` defined in the initialization. If ``batch_size`` is 0, then the computation of prediction will take place in a single chunk, which is much faster if you have enough memory.
 
 .. code:: python
 
@@ -179,42 +178,128 @@ By setting the ``curves.r_param`` parameter of the formula to a value different 
 The method ``get_optimal_keogh_radius()`` gives you a quick way to automatically compute an optimal value for ``curves.r_param``.
 To set the distance back to RMSE just set ``curves.set_keogh_radius(None)`` before recomputing the clustering.
 
-.. code:: python
-
-	curves.set_keogh_radius( wine_pdp_plot.get_optimal_keogh_radius() )
-	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
-
-Data points representations
-###########################
+The first time you compute the clustering, a distance matrix is computed. 
+Especially when using DTW distance, this might get time consuming.
+After the first time you call ``compute_clusters()`` on the ``curves`` object, 
+the distance matrix will be stored in memory and the computation will be then much faster.
+Anyway if you change the radius with ``curves.set_keogh_radius()``, you will need to recompute again the distance matrix.
 
 .. code:: python
 
-	my_pdp_plot.plot( curves, local_curves = False )
+	curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
+	keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
-.. image:: plot_alcohol_warped_3_for_rst.png
-    :width: 750px
+An example of the visualization customizations
+##############################################
+
+.. code:: python
+
+	my_pdp_plot.plot( keogh_curves_list, local_curves = False, plot_full_curves = True )
+
+.. image:: images/custom.png
+    :width: 1600px
     :align: center
-    :height: 413px
+    :height: 900px
     :alt: alternate text
 
-Highlighting a Custom Vector
+Highlighting a custom vector
 ###########################
 
-In case you want to highlight a particular vector partial dependence to compare with the clusters, this is how it works..
+In case you want to highlight the partial dependence of a particular vector ``custom_vect``, this is how it works..
 
 .. code:: python
 
-	the_matrix, custom_vectors = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
-
-	curves, custom_preds = my_pdp_plot.pred_comp_all( the_matrix, chosen_row_alterations = custom_vectors )
+	curves, custom_preds = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
 
 	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 	my_pdp_plot.plot( curves, local_curves = False,
 	                   chosen_row_preds_to_plot = custom_preds )
 
-.. image:: plot_alcohol_highlight_vect_for_rst.png
-    :width: 750px
+.. image:: images/custom_vect.png
+    :width: 1600px
     :align: center
-    :height: 490px
+    :height: 900px
+    :alt: alternate text
+
+Using your matplotlib figure
+############################
+
+If you really like to hand yourself matplotlib and be free to customize the visualization this is how it works:
+
+.. code:: python
+
+	curves_list = my_pdp_plot.compute_clusters(curves,ch_clust_number)
+
+	cluster_7 = curves_list[7]
+	cluster_0 = curves_list[0]
+	cluster_9 = curves_list[9]
+
+	fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+
+	my_pdp_plot.plot(cluster_7,
+	                   color_plot="red", 
+	                   plot_object=ax)
+
+	my_pdp_plot.plot(cluster_0,
+	                   color_plot="blue", 
+	                   plot_object=ax)
+
+	my_pdp_plot.plot(cluster_9,
+	                   color_plot="green", 
+	                   plot_object=ax)
+
+	plt.show()
+	plt.close("all")
+
+.. image:: images/own_figure.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+
+Comparing different models
+##########################
+
+There might be scenarios in which you want to compare clusters from different models.
+For example let's compare the Random Forest model we had so far with a Support Vector Machine model.
+A possible approach could be to check which clusters of the SVM model share the same instances with a selected cluster of the RF model.
+
+.. code:: python
+
+	curves_list_RF = my_pdp_plot_RF.compute_clusters(curves_RF, 10)
+	curves_list_SVM = my_pdp_plot_SVM.compute_clusters(curves_SVM, 10)
+
+	cluster_7_RF = curves_list_RF[7]
+	set_RF = set(cluster_7_RF[1].get_ixs())
+
+	for cluster_SVM in curves_list_SVM:
+	    set_SVM = set(cluster_SVM[1].get_ixs())
+	    intrs_size = len(set_RF.intersection(set_SVM))
+	    
+	    if intrs_size!=0:
+	        clusters_SVM_related.append(cluster_SVM)
+
+	fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+
+
+	wine_pdp_plot_RF.plot(cluster_7_RF,
+	                      color_plot="black", 
+	                      plot_object=ax)
+
+	color_legend = ["r","g","b"]
+
+	wine_pdp_plot_SVM.plot(clusters_SVM_related,
+	                       color_plot=color_legend,
+	                       plot_object=ax)
+	plt.show()
+	plt.close("all")
+
+The entire code to get also the legend updated with proper labels is present in the Jupyter notebook.
+
+.. image:: images/intersection.png
+    :width: 1600px
+    :align: center
+    :height: 900px
     :alt: alternate text

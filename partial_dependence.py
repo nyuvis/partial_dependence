@@ -45,33 +45,6 @@ __version__ = "0.0.1"
 
 class PdpCurves(object):
 
-    '''
-    This class is to store the most important information needed for the visualization.
-    The object created will be updated depending on the user actions.
-
-    Intialization
-    -------------
-
-        _preds: numpy.array of shape (num_rows, num_samples)
-            each row is relative to a different instance, each column to a different sample, each element is a prediction value relative to that combination.
-            It is computed from within the function PartialDependence.pred_comp_all().
-        
-    Updates
-    -------
-        _dm: numpy.array of shape (num_rows, num_rows)
-            the distance matrix holds the distances among each partial dependence curve. It is computed within this class either with RMSE or with LB Keogh distance,
-            depending from the r_param.
-        
-        r_param: integer value
-            this parameter is needed to compute the distance matrix with LB Keogh distance.
-            If it is equal to None, _dm will be relative to RMSE distance.
-            It can be computed by the function PartialDependence.get_optimal_keogh_radius().
-
-        labels_cluster: numpy.array of shape (1, num_rows)
-            Computed by PartialDependence.compute_clusters(), it holds the information of the clustering results.
-            Each element reports an integer cluster label relative to the instance with same index in the test-set. 
-
-    '''
 
     def __init__(self, preds):
         self._preds = preds
@@ -206,15 +179,15 @@ class PartialDependence(object):
         (REQUIRED) class name of the desired partial dependence
 
     num_samples: integer value
-        (OPTIONAL) number of desired samples. Sampling a feature is done with:
+        (OPTIONAL)[default = 100] number of desired samples. Sampling a feature is done with:
             numpy.linspace(min_value,max_value,num_samples)
         where the bounds are related to min and max value for that feature in the test-set.
 
     scale: float value
-        (OPTIONAL) scale parameter vector for normalization.
+        (OPTIONAL)[default = None] scale parameter vector for normalization.
 
     shift: float value
-        (OPTIONAL) shift parameter vector for normalization.
+        (OPTIONAL)[default = None] shift parameter vector for normalization.
         
             If you need to provide your data to the model in normalized form, 
             you have to define scale and shift such that:
@@ -500,6 +473,11 @@ class PartialDependence(object):
 
     def get_optimal_keogh_radius(self):
 
+            """
+            Compute the optimal value for the parameter needed to compute the LB Keogh distance.
+            It is computed given the sample values, the standard deviation, max and min.
+            """
+
             the_feature = self.the_feature
             num_samples = self.n_smpl
             df_sample = self.df_sample
@@ -589,6 +567,10 @@ class PartialDependence(object):
 
         plot_full_curves: boolean value
             (OPTIONAL) [default = False]
+
+        plot_object: matplotlib axes object
+            (OPTIONAL) [default = None] In case the user wants to pass along his own matplotlib figure to update.
+            This garantees all the possible customization.
 
         """
 
@@ -822,7 +804,7 @@ class PartialDependence(object):
 
         
         if plot_object is None:
-            fig, ax = plt.subplots(figsize=(16, 9), dpi=300)
+            fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
         else:
             ax = plot_object
             old_label = ax.get_legend_handles_labels()
@@ -893,8 +875,7 @@ class PartialDependence(object):
                             full_curves = plot_full_curves,
                             plot_object = ax)
 
-                if i == clust_number-1:
-                    end_plot = True
+
 
         else:
             if color_plot is None:
@@ -945,8 +926,8 @@ class PartialDependence(object):
         patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
                 label="{:s}".format(texts2[i]))[0] for i in range(size_legend) ] 
         
-        pos1 = (1.04, 1)
-        pos2 = (1.04, 0)
+        pos1 = (1.01, 1)
+        pos2 = (1.01, 0)
 
 
 
