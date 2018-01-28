@@ -135,7 +135,7 @@ The function returns a list of ``PdpCurves`` objects. Each element of the list i
 
 .. code:: python
 
-	curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+	curves_list_RF = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 
 Plotting the clustering results
@@ -145,7 +145,7 @@ Without customization, plotting the clustering is quite straightforward.
 
 .. code:: python
 
-	my_pdp_plot.plot( curves_list )
+	my_pdp_plot.plot( curves_list_RF )
 
 .. image:: images/clustering.png
     :width: 1600px
@@ -229,11 +229,11 @@ If you really like to hand yourself matplotlib and be free to customize the visu
 
 .. code:: python
 
-	curves_list = my_pdp_plot.compute_clusters(curves, chosen_cluster_number)
+	curves_list_RF = my_pdp_plot.compute_clusters(curves, chosen_cluster_number)
 
-	cluster_7 = curves_list[7]
-	cluster_0 = curves_list[0]
-	cluster_9 = curves_list[9]
+	cluster_7 = curves_list_RF[7]
+	cluster_0 = curves_list_RF[0]
+	cluster_9 = curves_list_RF[9]
 
 	fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
 
