@@ -5,7 +5,7 @@ A library for plotting partial dependency patterns of machine learning classifie
 Partial dependence measures the prediction change when changing one or more input features.
 We will focus only on 1D partial dependency plots. 
 For each instance in the data we can plot the prediction change as we change a single feature in a defined sample range.
-Then we cluster similar plots, e.g., instances reacting similarly value changes, to reduce clutter.
+Then we cluster similar plots, e.g., instances reacting similarly when a feature value changes, to reduce clutter.
 The technique is a black box approach to recognize sets of instances where the model makes similar decisions.
 
 You can install *partial_dependence* via
@@ -26,7 +26,7 @@ and import it in python using:
 Plotting clustering of partial dependence
 ****************************************
 
-Following we will show the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
+Following we will show how the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
 
 You can also run the Jupyter notebook file to have a running example. 
 
@@ -36,7 +36,7 @@ Given the heavy visualizations, it is recommended to execute Jupyter with the fo
 
 	jupyter notebook --NotebookApp.iopub_data_rate_limit=10000000000
 
-The visualization we are using as example are coming from a Random Forest Model trained on the `UCI Wine Quality Data Set <https://archive.ics.uci.edu/ml/datasets/wine+quality>`_ .
+The visualization we are using as example are coming from a Random Forest model trained on the `UCI Wine Quality Data Set <https://archive.ics.uci.edu/ml/datasets/wine+quality>`_.
 The prediction is towards the class "good wine".
 
 Initialization
@@ -118,7 +118,7 @@ Here you can find a first example. The visualization is automatically saved in a
 
 .. code:: python
 
-	my_pdp_plot.plot(curves,local_curves = True, plot_full_curves = True)
+	my_pdp_plot.plot( curves, local_curves = True, plot_full_curves = True )
 
 .. image:: images/full_curves.png
     :width: 1600px
@@ -229,7 +229,7 @@ If you really like to hand yourself matplotlib and be free to customize the visu
 
 .. code:: python
 
-	curves_list = my_pdp_plot.compute_clusters(curves,ch_clust_number)
+	curves_list = my_pdp_plot.compute_clusters(curves, chosen_cluster_number)
 
 	cluster_7 = curves_list[7]
 	cluster_0 = curves_list[0]
@@ -297,6 +297,8 @@ A possible approach could be to check which clusters of the SVM model share the 
 	plt.close("all")
 
 The entire code to get also the legend updated with proper labels is present in the Jupyter notebook.
+The cluster 5 from the SVM in green shares 53 % of the instances with the cluster 7 from the RF in black.
+This is just an example of what it is possible to do with this library.
 
 .. image:: images/intersection.png
     :width: 1600px
