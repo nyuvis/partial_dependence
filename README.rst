@@ -264,12 +264,30 @@ Comparing different models
 
 There might be scenarios in which you want to compare clusters from different models.
 For example let's compare the Random Forest model we had so far with a Support Vector Machine model.
-A possible approach could be to check which clusters of the SVM model share the same instances with a selected cluster of the RF model.
 
 .. code:: python
 
-	curves_list_RF = my_pdp_plot_RF.compute_clusters(curves_RF, 10)
-	curves_list_SVM = my_pdp_plot_SVM.compute_clusters(curves_SVM, 10)
+	wine_pdp_plot_SVM = pdp_plot.PartialDependence(df_test,
+	                  model_SVM,
+	                  labels_name,
+	                  labels_focus,
+	                  num_samples,
+	                  scale_SVM,
+	                  shift_SVM)
+
+	curves = wine_pdp_plot_SVM.pdp(chosen_feature)
+	curves_list_SVM = wine_pdp_plot_SVM.compute_clusters(curves, chosen_cluster_number)
+	wine_pdp_plot_SVM.plot(curves_list_SVM)
+
+.. image:: images/SVM.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+A possible approach could be to check which clusters of the SVM model share the same instances with a selected cluster of the RF model.
+
+.. code:: python
 
 	cluster_7_RF = curves_list_RF[7]
 	set_RF = set(cluster_7_RF[1].get_ixs())
