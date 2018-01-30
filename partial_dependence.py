@@ -497,7 +497,7 @@ class PartialDependence(object):
 
 
     
-    def compute_clusters(self, curves, clust_number=10):
+    def compute_clusters(self, curves, clust_number=5):
 
         """
         Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
@@ -511,7 +511,7 @@ class PartialDependence(object):
             (REQUIRED) Returned by previous function pred_comp_all().
 
         clust_number : integer value
-            (OPTIONAL) [default = 10] The number of desired clusters.
+            (OPTIONAL) [default = 5] The number of desired clusters.
 
         """
 
@@ -539,7 +539,8 @@ class PartialDependence(object):
              local_curves = True,
              chosen_row_preds_to_plot = None,
              plot_full_curves = False,
-             plot_object = None):
+             plot_object = None,
+             cell_view = False):
 
 
 
@@ -583,6 +584,9 @@ class PartialDependence(object):
         num_samples = self.n_smpl
         scale = self.scl
         shift = self.shft
+
+        data_set_pred_index = self.data_set_pred_index
+
 
         def plotting_prediction_changes(
                 single_curve_object, 
@@ -636,7 +640,6 @@ class PartialDependence(object):
             dictLabtoIndex = self.dictLabtoIndex
             original_preds = self.original_preds
             changing_rows = self.changing_rows
-            data_set_pred_index = self.data_set_pred_index
             df_sample = self.df_sample
             df_features = self.df_features
 
@@ -654,9 +657,14 @@ class PartialDependence(object):
             num_rows = len(pred_matrix)
 
             if single_cluter and plot_object is None:
-                ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=20)
+                ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)
+            elif cell_view and multi_clusters:
+                if clust_number <= 15:
+                    ax.set_title("Cluster " + str(label_title_cluster), fontsize=font_size_par)
+                else:
+                    ax.set_title("")
             else:
-                ax.set_title("1D partial dependency of " + fix, fontsize=20)
+                ax.set_title("1D partial dependency of " + fix, fontsize=font_size_par)
 
             if full_curves:
                 for i in range(num_rows):
@@ -686,17 +694,19 @@ class PartialDependence(object):
                 ax.plot(original_data_sample,chosen_row_preds,color="red",lw=2)
 
             the_mean_value = back_to_the_orginal(df_features["mean"][fix], fix)
-            ax.axvline(x=the_mean_value, color="green", linestyle='--')
-            ax.axhline(y=thresh, color="red", linestyle='--')
-            ax.set_ylabel("prediction", fontsize=20)
+            if not cell_view:
+                ax.axvline(x=the_mean_value, color="green", linestyle='--')
+                ax.axhline(y=thresh, color="red", linestyle='--')
+            ax.set_ylabel("prediction", fontsize=font_size_par)
 
-            ax.set_xlabel(fix, fontsize=20)
+            ax.set_xlabel(fix, fontsize=font_size_par)
             ax.set_xlim([original_data_sample[0], original_data_sample[num_samples-1]])
             ax.set_ylim([0, 1])
-            #pred = 0
-            ax.text(-0.09, 0.05, class_array[1 - data_set_pred_index], fontsize=20, transform=ax.transAxes)
-            #pred = 1
-            ax.text(-0.09, 0.95, class_array[data_set_pred_index], fontsize=20, transform=ax.transAxes)
+            if not cell_view:
+                #pred = 0
+                ax.text(-0.09, 0.05, class_array[1 - data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
+                #pred = 1
+                ax.text(-0.09, 0.95, class_array[data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
 
 
         
@@ -783,6 +793,7 @@ class PartialDependence(object):
         # WHERE THE MAGIC HAPPENS #
         ###########################
 
+        font_size_par = 20
 
 
         single_cluter = False
@@ -804,7 +815,26 @@ class PartialDependence(object):
 
         
         if plot_object is None:
-            fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+            if cell_view and multi_clusters:
+
+                grid_heigth = int(np.ceil(np.sqrt(clust_number)))
+                grid_width = int(np.ceil(clust_number / grid_heigth))
+
+
+                grid_heigth_real = grid_heigth
+                grid_width_real = grid_width
+                if grid_heigth*grid_width == clust_number:
+
+                    grid_heigth = int(np.ceil(np.sqrt(clust_number+1)))
+                    grid_width = int(np.ceil((clust_number+1) / grid_heigth))
+
+
+                col_plot_init = -1
+                row_plot_init = 0
+
+                fig, ax = plt.subplots(nrows=grid_heigth, ncols=grid_width, figsize=(16, 9), dpi=100)
+            else:
+                fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
         else:
             ax = plot_object
             old_label = ax.get_legend_handles_labels()
@@ -833,11 +863,10 @@ class PartialDependence(object):
         texts1 = []
         texts2 = []
         color_legend = []
-
         end_plot = False
         if multi_clusters:
             if color_plot is None:
-                color_plot = ['#1f78b4',
+                color_plot_original = ['#1f78b4',
                                 '#33a02c',
                                 '#e31a1c',
                                 '#ff7f00',
@@ -846,7 +875,17 @@ class PartialDependence(object):
                                 '#b2df8a',
                                 '#fb9a99',
                                 '#fdbf6f',
-                                '#cab2d6'] 
+                                '#cab2d6']
+                if len(color_plot_original) < clust_number:
+                    color_plot = []
+                    i_color = 0
+                    for i in range(clust_number):
+                        color_plot.append(color_plot_original[i_color])
+                        i_color+=1
+                        if i_color == len(color_plot_original) - 1:
+                            i_color = 0
+                else:
+                    color_plot = color_plot_original
 
 
             for i in range(clust_number):
@@ -861,9 +900,32 @@ class PartialDependence(object):
                     avgRmse = 0
                 else:
                     avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
-                texts1.append("Clust. " + str(label_title_cluster) + " : " + str(avgRmse))
-                texts2.append("Clust. " + str(label_title_cluster) + " : " + str(sizeClust))
+
+                label1 = " : " + str(avgRmse)
+                label2 = " : " + str(sizeClust)
+
+                texts1.append("Clust. " + str(label_title_cluster) + label1)
+                texts2.append("Clust. " + str(label_title_cluster) + label2)
                 color_legend.append(color_plot[i])
+
+                if cell_view:
+                    font_size_par = 15
+
+                    if i /  grid_heigth_real < col_plot_init + 1:
+                        #print("same_row:",i /  grid_heigth,"<",col_plot_init + 1)
+                        col_plot = col_plot_init 
+                        row_plot = row_plot_init + 1
+                    else:
+                        col_plot = col_plot_init + 1
+                        row_plot = 0
+                    #print("r:",col_plot,"- c:",row_plot)
+                    axes_plot = ax[row_plot,col_plot]
+
+                    col_plot_init = col_plot
+                    row_plot_init = row_plot
+
+                else:
+                    axes_plot = ax                    
 
                 plotting_prediction_changes(
                             single_curve_object = single_curve, 
@@ -873,7 +935,18 @@ class PartialDependence(object):
                             pred_spag = preds_local, 
                             chosen_row_preds = chosen_row_preds_to_plot, 
                             full_curves = plot_full_curves,
-                            plot_object = ax)
+                            plot_object = axes_plot)
+
+                if cell_view:
+
+                    if col_plot_init != 0:
+                            axes_plot.set_ylabel("")
+                            axes_plot.yaxis.set_ticklabels([])
+
+                    if row_plot_init != grid_heigth_real-1:
+                            axes_plot.set_xlabel("")
+                            axes_plot.xaxis.set_ticklabels([])
+
 
 
 
@@ -900,8 +973,12 @@ class PartialDependence(object):
             else:
                 string_legend = " : "
 
-            texts1.append(string_legend + str(avgRmse))
-            texts2.append(string_legend + str(sizeClust))
+            label1 = string_legend + str(avgRmse)
+            label2 = string_legend + str(sizeClust)
+
+            texts1.append(label1)
+            texts2.append(label2)
+
             color_legend.append(color_plot)
 
             plotting_prediction_changes(single_curve_object = single_curve, 
@@ -916,7 +993,6 @@ class PartialDependence(object):
         if plot_object is None:
             end_plot = True
 
-        plt.subplots_adjust(top=.9, bottom=.1, left=.075, right=.80)
 
         size_legend = len(texts2)
 
@@ -952,25 +1028,88 @@ class PartialDependence(object):
 
         patches2 = [t[2] for t in zipped2]
 
-        ax.legend( handles=patches1, bbox_to_anchor=pos1, 
-                   loc="upper left", ncol=1, 
-                   facecolor="#d3d3d3", numpoints=1, 
-                   fontsize=13,frameon=False,
-                   title = "Average Distance" )
+        if not cell_view:
+
+            plt.subplots_adjust(top=.9, bottom=.1, left=.075, right=.80)
 
 
-        legend2 = Legend( ax, labels=texts2, handles=patches2, bbox_to_anchor=pos2,
-                          loc="lower left", ncol=1, facecolor="#d3d3d3", 
-                          numpoints=1, fontsize=13,frameon=False,
-                          title = "# of Instances")
+            ax.legend( handles=patches1, bbox_to_anchor=pos1, 
+                       loc="upper left", ncol=1, 
+                       facecolor="#d3d3d3", numpoints=1, 
+                       fontsize=13,frameon=False,
+                       title = "Average Distance" )
 
-        for art in ax.artists:
-            art.remove()
 
-        ax.add_artist(legend2)
+            legend2 = Legend( ax, labels=texts2, handles=patches2, bbox_to_anchor=pos2,
+                              loc="lower left", ncol=1, facecolor="#d3d3d3", 
+                              numpoints=1, fontsize=13,frameon=False,
+                              title = "# of Instances")
+
+            for art in ax.artists:
+                art.remove()
+
+            ax.add_artist(legend2)
+
+        elif cell_view and multi_clusters:
+
+            ax_object_count = 0
+            extra_space = False
+            no_axis = False
+
+            if grid_heigth!=grid_heigth_real  or grid_width_real!=grid_width_real:
+                extra_space = True
+            for j in range(grid_width):
+                for i in range(grid_heigth):
+
+                    ax_object = ax[i,j]
+                    ax_object_count+=1
+
+                    if clust_number <= 15:
+
+                        if (ax_object_count > clust_number and not extra_space) or (extra_space and (i > grid_width_real-1 or j > grid_width_real-1)):
+                            ax_object.axis("off")
+
+                        if (ax_object_count == clust_number + 1 and not extra_space) or (extra_space and j == 0 and i == grid_heigth - 1):
+
+                            ax_object.legend( handles=patches1, bbox_to_anchor=(0,1), 
+                                loc="upper left", ncol=1, 
+                                facecolor="#d3d3d3", numpoints=1, 
+                                fontsize=10,frameon=False,
+                                title = "Average Distance" )
+
+
+                            legend2 = Legend( ax_object, labels=texts2, handles=patches2, bbox_to_anchor=(1,1),
+                                  loc="upper right", ncol=1, facecolor="#d3d3d3", 
+                                  numpoints=1, fontsize=10,frameon=False,
+                                  title = "# of Instances")
+
+                            for art in ax_object.artists:
+                                art.remove()
+
+                            ax_object.add_artist(legend2)
+                    else:
+                        no_axis = True
+                        ax_object.axis("off")
+
+            title_all = 'pdp for class: '+class_array[data_set_pred_index].replace("\n"," ")
+            title_all = title_all + " - feature: "+fix
+
+            if no_axis:
+                fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.05,left=.05, right=.95)
+
+            else:
+                if not extra_space:
+                    fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.25,left=.05, right=.95)
+
+                else:
+                    fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.1,left=.05, right=.95)
+
+            fig.suptitle(title_all, fontsize=font_size_par)
+
+
 
         # no sides
-        #plt.tight_layout()
+        # plt.tight_layout()
         # only right side
         #plt.subplots_adjust(top=.9, bottom=.1, left=.05, right=.80)
         # both sides
