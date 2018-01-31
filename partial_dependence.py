@@ -63,6 +63,21 @@ class PdpCurves(object):
       res = type(self)(self._preds)
       res.__dict__.update(self.__dict__)
       return res
+    def get_mean_distances(self,cluster_A, cluster_B):
+        dist_mtrx = self._dm
+        real_A = cluster_A[1]
+        real_B = cluster_B[1]
+        lab_A = cluster_A[0]
+        lab_B = cluster_B[0]
+        if lab_A == lab_B:
+            return 1.1
+        inst_A_list = real_A.get_ixs()
+        inst_B_list = real_B.get_ixs()
+        distance_list = []
+        for a in inst_A_list:
+            for b in inst_B_list:
+                distance_list.append(dist_mtrx[a,b])
+        return np.mean(distance_list)
 
     def split(self,labels_cluster):
         if labels_cluster is None:
@@ -75,8 +90,32 @@ class PdpCurves(object):
             c._ixs = self._ixs[labels_cluster == lbl]
             return c
 
+        def get_macro_dist(clusters_input):
+            
+            pairs_of_clusters = []
+            for comb in combinations(list_of_clusters, 2):
+                pairs_of_clusters.append(comb)
+
+            num_cluster_here = len(list_of_clusters)
+            macro_dist_matrix = np.zeros((num_cluster_here,num_cluster_here))
+
+            for i in list_of_clusters:
+                for j in list_of_clusters:
+                    macro_dist_matrix[i,j] = self.get_mean_distances(clusters_input[i],
+                                                                     clusters_input[j])
+
+            return macro_dist_matrix
+
+
         list_of_clusters = np.unique(labels_cluster)
-        return [ (lbl, get_slice(self.copy(), lbl)) for lbl in list_of_clusters ]
+
+        curves_list = []
+        for lbl in list_of_clusters:
+            the_slice = get_slice(self.copy(), lbl)
+            curves_list.append((lbl, the_slice)) 
+
+        return (curves_list,get_macro_dist(curves_list))
+
     def get_ixs(self):
         return self._ixs
 
@@ -529,7 +568,47 @@ class PartialDependence(object):
         self.dist_matrix = distance_matrix
         labels_array = clust.labels_
 
-        return curves.split(labels_array)
+        goal = curves.split(labels_array)
+        the_list = goal[0]
+        the_matrix_for_sorting = goal[1]
+
+        size = 0
+        for cl in the_list:
+            size_new = len(cl[1].get_ixs())
+            
+            if size_new>size:
+                size = size_new
+                label_biggest = cl[0]
+
+        cluster_labels_still = list(range(len(the_list)))
+        corder = [ label_biggest ]
+        cluster_labels_still.remove(label_biggest)
+
+        while len(corder)<len(the_list):
+
+            mins = {}
+            for c in corder:
+                full_distances = list(the_matrix_for_sorting[c,:])
+                distances = list(the_matrix_for_sorting[c,cluster_labels_still])
+
+                the_min = np.min(distances)
+                the_index = full_distances.index(min(distances))
+                mins[the_index] = the_min
+
+            new_cord = min(mins, key=mins.get)
+
+            corder.append(new_cord)
+            cluster_labels_still.remove(new_cord)
+
+
+        if len(np.unique(corder))!=len(the_list):
+            print("Fatal Error.")
+            
+        the_list_sorted = []
+        for c in corder:
+            the_list_sorted.append(the_list[c])
+
+        return the_list_sorted
         #curves.write_labels(labels_array)
 
     def plot(self,
@@ -660,7 +739,7 @@ class PartialDependence(object):
                 ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)
             elif cell_view and multi_clusters:
                 if clust_number <= 15:
-                    ax.set_title("Cluster " + str(label_title_cluster), fontsize=font_size_par)
+                    ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2, fontsize=font_size_par)
                 else:
                     ax.set_title("")
             else:
@@ -943,9 +1022,10 @@ class PartialDependence(object):
                             axes_plot.set_ylabel("")
                             axes_plot.yaxis.set_ticklabels([])
 
-                    if row_plot_init != grid_heigth_real-1:
+                    if row_plot_init != grid_heigth_real-1 and i != clust_number-1:
                             axes_plot.set_xlabel("")
                             axes_plot.xaxis.set_ticklabels([])
+
 
 
 
@@ -1095,14 +1175,23 @@ class PartialDependence(object):
             title_all = title_all + " - feature: "+fix
 
             if no_axis:
-                fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.05,left=.05, right=.95)
+                fig.subplots_adjust(wspace=0.05, hspace = 0.25, top=0.9,bottom=0.05,left=.05, right=.95)
 
             else:
                 if not extra_space:
-                    fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.25,left=.05, right=.95)
-
+                    if clust_number == 11:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.2,left=.05, right=.95)
+                    elif clust_number > 11 and clust_number < 15:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.08,left=.05, right=.95)
+                    elif clust_number == 15:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.3,left=.05, right=.95)
+                    else:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.1,left=.05, right=.95)
                 else:
-                    fig.subplots_adjust(wspace=0.05, hspace = 0.25,top=0.9,bottom=0.1,left=.05, right=.95)
+                    if clust_number >= 9:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                    else:
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=-0.05,left=.05, right=.95)
 
             fig.suptitle(title_all, fontsize=font_size_par)
 
