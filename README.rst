@@ -192,41 +192,8 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 	curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
 	keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
-An example of the visualization customizations
-##############################################
-
-.. code:: python
-
-	my_pdp_plot.plot( keogh_curves_list, local_curves = False, plot_full_curves = True )
-
-.. image:: images/custom.png
-    :width: 1600px
-    :align: center
-    :height: 900px
-    :alt: alternate text
-
-Highlighting a custom vector
-###########################
-
-In case you want to highlight the partial dependence of a particular vector ``custom_vect``, this is how it works..
-
-.. code:: python
-
-	curves, custom_preds = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
-
-	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
-
-	my_pdp_plot.plot( curves, local_curves = False,
-	                   chosen_row_preds_to_plot = custom_preds )
-
-.. image:: images/custom_vect.png
-    :width: 1600px
-    :align: center
-    :height: 900px
-    :alt: alternate text
-
-Using your matplotlib figure
-############################
+Using your own matplotlib figure
+################################
 
 If you really like to hand yourself matplotlib and be free to customize the visualization this is how it works:
 
@@ -322,6 +289,67 @@ The cluster 5 from the SVM in green shares 53 % of the instances with the cluste
 This is just an example of what it is possible to do with this library.
 
 .. image:: images/intersection.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+An example of the visualization customizations
+##############################################
+
+.. code:: python
+
+	my_pdp_plot.plot( keogh_curves_list, local_curves = False, plot_full_curves = True )
+
+.. image:: images/custom.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+.. code:: python
+
+	curves_list_RF = my_pdp_plot.compute_clusters( curves_RF, 5 )
+
+	my_pdp_plot.plot( curves_list_RF, cell_view = True)
+
+.. image:: images/RF_five_cell_view.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+.. code:: python
+
+	curves_list_SVM = my_pdp_plot_SVM.compute_clusters( curves_SVM, 25 )
+
+	my_pdp_plot_SVM.plot( curves_list_SVM, 
+						  cell_view = True, 
+                          plot_full_curves = True, 
+                          local_curves = False, 
+                          path="plot_alcohol.png" )
+
+.. image:: images/SVM_25_all.png
+    :width: 1600px
+    :align: center
+    :height: 900px
+    :alt: alternate text
+
+Highlighting a custom vector
+###########################
+
+In case you want to highlight the partial dependence of a particular vector ``custom_vect``, this is how it works..
+
+.. code:: python
+
+	curves, custom_preds = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
+
+	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+
+	my_pdp_plot.plot( curves, local_curves = False,
+	                   chosen_row_preds_to_plot = custom_preds )
+
+.. image:: images/custom_vect.png
     :width: 1600px
     :align: center
     :height: 900px
