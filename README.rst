@@ -325,7 +325,7 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 	curves_list_SVM = my_pdp_plot_SVM.compute_clusters( curves_SVM, 25 )
 
 	my_pdp_plot_SVM.plot( curves_list_SVM, 
-						  cell_view = True, 
+                          cell_view = True, 
                           plot_full_curves = True, 
                           local_curves = False, 
                           path="plot_alcohol.png" )
