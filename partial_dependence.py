@@ -420,9 +420,7 @@ class PartialDependence(object):
 
 
             def compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch, chosen_row_alterations_sub_funct=None):
-                if number_all_preds_in_batch < num_samples:
-                    print ("Error: batch size cannot be less than sample size.")
-                    return np.nan
+
                 #t = time.time()
                 num_feat = self.num_feat
                 data_set_pred_index = self.data_set_pred_index
@@ -432,15 +430,26 @@ class PartialDependence(object):
 
                 #number_all_preds_in_batch = 1000
 
+                if number_all_preds_in_batch < num_samples:
+                    print ("Error: batch size cannot be less than sample size.")
+                    return np.nan
+
+                if number_all_preds_in_batch > num_samples*num_rows:
+                    print ("Error: batch size cannot be greater than total size (num. of instances X num. of samples).")
+                    return np.nan
+
+
+
+
                 num_of_instances_in_batch = int( np.floor( number_all_preds_in_batch / num_samples ) )
                 how_many_calls = int( np.ceil( num_rows / num_of_instances_in_batch ) )
                 residual = num_of_instances_in_batch * how_many_calls - num_rows
                 num_of_instances_in_last_batch = num_of_instances_in_batch - residual
 
                 #print ("num_of_instances_in_batch"  ,  num_of_instances_in_batch)
-                #print ( "how_many_calls" , how_many_calls )
-                #print ( "residual" , residual )
-                #print ( "num_of_instances_in_last_batch" , num_of_instances_in_last_batch )
+                #print ( "how_many_calls" , how_many_calls, type(how_many_calls) )
+                #print ( "residual" , residual)
+                #print ( "num_of_instances_in_last_batch" , num_of_instances_in_last_batch)
 
 
                 for i in range(0, how_many_calls):
@@ -452,12 +461,13 @@ class PartialDependence(object):
                     low_bound_index = i*num_of_instances_in_batch
                     high_bound_index = low_bound_index + num_of_instances_in_batch
 
+
                     if i == how_many_calls -1 and residual != 0:
                         high_bound_index = low_bound_index + num_of_instances_in_last_batch
 
                     matrix_batch = matrix_changed_rows[low_bound_index:high_bound_index]
 
-                    pred_matrix_batch = compute_pred(self,matrix_batch)
+                    pred_matrix_batch = compute_pred(self,matrix_batch).get_preds()
 
                     pred_matrix[low_bound_index:high_bound_index] = np.copy(pred_matrix_batch)
 
@@ -470,9 +480,13 @@ class PartialDependence(object):
                 return curves_returned
 
             if batch_size_input != 0:
-                return compute_pred_in_chunks(self, matrix_changed_rows, number_all_preds_in_batch = batch_size_input, 
-                    chosen_row_alterations_sub_funct = chosen_row_alterations_input)
-            return compute_pred(self, matrix_changed_rows, chosen_row_alterations_sub_funct = chosen_row_alterations_input)
+
+                return compute_pred_in_chunks(self, matrix_changed_rows, 
+                                                number_all_preds_in_batch = batch_size_input, 
+                                                chosen_row_alterations_sub_funct = chosen_row_alterations_input)
+
+            return compute_pred(self, matrix_changed_rows, 
+                                chosen_row_alterations_sub_funct = chosen_row_alterations_input)
 
 
         num_rows = len(rows)
@@ -619,7 +633,8 @@ class PartialDependence(object):
              chosen_row_preds_to_plot = None,
              plot_full_curves = False,
              plot_object = None,
-             cell_view = False):
+             cell_view = False,
+             path = None):
 
 
 
@@ -651,6 +666,14 @@ class PartialDependence(object):
         plot_object: matplotlib axes object
             (OPTIONAL) [default = None] In case the user wants to pass along his own matplotlib figure to update.
             This garantees all the possible customization.
+
+        cell_view: boolean value
+            (OPTIONAL) [default = False] It displays clusters in different cells. 
+            If a list of clusters is not provided this argument is ignored.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically computed.
 
         """
 
@@ -751,8 +774,14 @@ class PartialDependence(object):
 
             if spag:
                 for j in indices_from_test:
-                    NowSample =allSamplesOriginal[fix + "-o-" + str(j)][originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
-                    NowPreds = pred_spag[j, originalIndex - howFarIndex:originalIndex + howFarIndex + 1]
+
+                    low_spag = originalIndex - howFarIndex
+                    high_spag = originalIndex + howFarIndex + 1
+
+                    NowSample =allSamplesOriginal[fix + "-o-" + str(j)][low_spag:high_spag]
+
+                    NowPreds = pred_spag[j, low_spag:high_spag]
+
                     #plt.plot(NowSample,NowPreds,alpha=trasparenza,color=colors_10_cluster[i])
                     x_i, y_i = b_spline(np.array(NowSample), np.array(NowPreds))
                     ax.plot(x_i, y_i, alpha=0.8, color=ticks_color)
@@ -786,6 +815,9 @@ class PartialDependence(object):
                 ax.text(-0.09, 0.05, class_array[1 - data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
                 #pred = 1
                 ax.text(-0.09, 0.95, class_array[data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
+            else:
+                if clust_number > 15:
+                    ax.text(0.5,0.5,"#"+str(label_title_cluster).zfill(2),fontsize=font_size_par+10,transform=ax.transAxes, ha = "center",va = "center",alpha = 0.25)
 
 
         
@@ -928,7 +960,7 @@ class PartialDependence(object):
 
         if local_curves:
             originalIndex = int(num_samples / 2)
-            howFarIndex = 2
+            howFarIndex = int(np.ceil(2/100 * num_samples))
             allSamples = {}
 
             the_matrix_local, allSamples = pdp_local(fix,allSamples)
@@ -946,15 +978,16 @@ class PartialDependence(object):
         if multi_clusters:
             if color_plot is None:
                 color_plot_original = ['#1f78b4',
-                                '#33a02c',
-                                '#e31a1c',
-                                '#ff7f00',
-                                '#6a3d9a',
-                                '#a6cee3',
-                                '#b2df8a',
-                                '#fb9a99',
-                                '#fdbf6f',
-                                '#cab2d6']
+                                       '#33a02c',
+                                       '#e31a1c',
+                                       '#ff7f00',
+                                       '#6a3d9a',
+                                       '#a6cee3',
+                                       '#b2df8a',
+                                       '#fb9a99',
+                                       '#fdbf6f',
+                                       '#cab2d6']
+
                 if len(color_plot_original) < clust_number:
                     color_plot = []
                     i_color = 0
@@ -1136,8 +1169,9 @@ class PartialDependence(object):
             extra_space = False
             no_axis = False
 
-            if grid_heigth!=grid_heigth_real  or grid_width_real!=grid_width_real:
+            if grid_heigth!=grid_heigth_real:
                 extra_space = True
+
             for j in range(grid_width):
                 for i in range(grid_heigth):
 
@@ -1188,9 +1222,14 @@ class PartialDependence(object):
                     else:
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.1,left=.05, right=.95)
                 else:
-                    if clust_number >= 9:
+                    if clust_number > 15:
+                        # 16 25 ...
+                        fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                    elif clust_number >= 9 and clust_number < 15:
+                        #9
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
                     else:
+                        #4
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=-0.05,left=.05, right=.95)
 
             fig.suptitle(title_all, fontsize=font_size_par)
@@ -1212,9 +1251,10 @@ class PartialDependence(object):
 
         if end_plot:
 
+            if path is not None:
+                if len(path) == 0 or type(path) is not str:
+                    path = "plot_" + fix + ".png"
 
-            path = "plot_" + fix + ".png"
-
-            fig.savefig(path)
+                fig.savefig(path)
             plt.show()
             plt.close("all")
