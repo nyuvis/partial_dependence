@@ -23,7 +23,7 @@ and import it in python using:
 
 
 ****************************************
-Plotting clustering of partial dependence
+1. Plotting clustering of partial dependence
 ****************************************
 
 Following we will show how the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
@@ -39,7 +39,7 @@ Given the heavy visualizations, it is recommended to execute Jupyter with the fo
 The visualization we are using as example are coming from a Random Forest model trained on the `UCI Wine Quality Data Set <https://archive.ics.uci.edu/ml/datasets/wine+quality>`_.
 The prediction is towards the class "good wine".
 
-Initialization
+1.1 Initialization
 ##############
 
 Required arguments:
@@ -88,7 +88,7 @@ If our model does not use normalization, we can initialize the tool this way:
 
 
 
-Creating the PdpCurves object
+1.2 Creating the PdpCurves object
 ##############################
 
 By choosing a feature and changing it in the sample range, for each row in the test-set we can create ``num_samples`` different versions of the original instance.
@@ -108,7 +108,7 @@ Required argument:
 
 	curves = my_pdp_plot.pdp( chosen_feature )
 
-Getting an overview of the partial dependence
+1.3 Getting an overview of the partial dependence
 #############################################
 
 It is already possible to plot something with the function ``plot()``.
@@ -126,7 +126,7 @@ Here you can find a first example. The visualization is automatically saved in a
     :height: 900px
     :alt: alternate text
 
-Clustering the partial dependence
+1.4 Clustering the partial dependence
 #################################
 
 To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide ``curves``.
@@ -138,7 +138,7 @@ The function returns a list of ``PdpCurves`` objects. Each element of the list i
 	curves_list_RF = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 
-Plotting the clustering results
+1.5 Plotting the clustering results
 ################################
 
 Without customization, plotting the clustering is quite straightforward.
@@ -155,10 +155,10 @@ Without customization, plotting the clustering is quite straightforward.
 
 
 ****************************************
-Customization and extra functions
+2. Customization and extra functions
 ****************************************
 
-Computing predictions in chunks
+2.1 Computing predictions in chunks
 ###############################
 
 When using ``pdp()``, sometimes the amount of data to process is too large and it is necessary to divide it in chunks so that we don't run out of memory.
@@ -171,28 +171,8 @@ If ``batch_size`` is 0, then the computation of prediction will take place in a 
 
 	curves = my_pdp_plot.pdp( chosen_feature, batch_size = 1000 )
 
-Clustering with DTW distance
-############################
 
-To cluster together the partial dependence plots, we measure the distance among each pair.
-By default this distance is measured with RMSE.
-Another option is `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_  distance, an approximation of Dynamic Time Warping (DTW) distance.
-By setting the ``curves.r_param`` parameter of the formula to a value different from ``None``, you are able to compute the clustering with the LB Keogh.
-The method ``get_optimal_keogh_radius()`` gives you a quick way to automatically compute an optimal value for ``curves.r_param``.
-To set the distance back to RMSE just set ``curves.set_keogh_radius(None)`` before recomputing the clustering.
-
-The first time you compute the clustering, a distance matrix is computed. 
-Especially when using DTW distance, this might get time consuming.
-After the first time you call ``compute_clusters()`` on the ``curves`` object, 
-the distance matrix will be stored in memory and the computation will be then much faster.
-Anyway if you change the radius with ``curves.set_keogh_radius()``, you will need to recompute again the distance matrix.
-
-.. code:: python
-
-	curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
-	keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
-
-Using your own matplotlib figure
+2.2 Using your own matplotlib figure
 ################################
 
 If you really like to hand yourself matplotlib and be free to customize the visualization this is how it works:
@@ -229,8 +209,8 @@ If you really like to hand yourself matplotlib and be free to customize the visu
     :alt: alternate text
 
 
-Comparing different models
-##########################
+2.3 Comparing different models
+##############################
 
 There might be scenarios in which you want to compare clusters from different models.
 For example let's compare the Random Forest model we had so far with a Support Vector Machine model.
@@ -294,7 +274,28 @@ This is just an example of what it is possible to do with this library.
     :height: 900px
     :alt: alternate text
 
-An example of the visualization customizations
+2.4 Clustering with DTW distance
+################################
+
+To cluster together the partial dependence plots, we measure the distance among each pair.
+By default this distance is measured with RMSE.
+Another option is `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_  distance, an approximation of Dynamic Time Warping (DTW) distance.
+By setting the ``curves.r_param`` parameter of the formula to a value different from ``None``, you are able to compute the clustering with the LB Keogh.
+The method ``get_optimal_keogh_radius()`` gives you a quick way to automatically compute an optimal value for ``curves.r_param``.
+To set the distance back to RMSE just set ``curves.set_keogh_radius(None)`` before recomputing the clustering.
+
+The first time you compute the clustering, a distance matrix is computed. 
+Especially when using DTW distance, this might get time consuming.
+After the first time you call ``compute_clusters()`` on the ``curves`` object, 
+the distance matrix will be stored in memory and the computation will be then much faster.
+Anyway if you change the radius with ``curves.set_keogh_radius()``, you will need to recompute again the distance matrix.
+
+.. code:: python
+
+	curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
+	keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+
+2.5 An example of the visualization customizations
 ##############################################
 
 .. code:: python
@@ -335,8 +336,8 @@ An example of the visualization customizations
     :height: 900px
     :alt: alternate text
 
-Highlighting a custom vector
-###########################
+2.6 Highlighting a custom vector
+################################
 
 In case you want to highlight the partial dependence of a particular vector ``custom_vect``, this is how it works..
 
