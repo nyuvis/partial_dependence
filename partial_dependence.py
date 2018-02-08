@@ -22,6 +22,10 @@ from sklearn.cluster import AgglomerativeClustering
 import scipy.interpolate as si
 import sys
 from matplotlib.legend import Legend
+import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
 
 
 
@@ -47,6 +51,7 @@ class PdpCurves(object):
 
 
     def __init__(self, preds):
+
         self._preds = preds
         self._ixs = np.arange(self._preds.shape[0])
 
@@ -57,30 +62,41 @@ class PdpCurves(object):
 
 
     def copy(self):
+
         return self.__copy__()
 
     def __copy__(self):
+
       res = type(self)(self._preds)
       res.__dict__.update(self.__dict__)
+
       return res
+
     def get_mean_distances(self,cluster_A, cluster_B):
+
         dist_mtrx = self._dm
         real_A = cluster_A[1]
         real_B = cluster_B[1]
         lab_A = cluster_A[0]
         lab_B = cluster_B[0]
+
         if lab_A == lab_B:
             return 1.1
+
         inst_A_list = real_A.get_ixs()
         inst_B_list = real_B.get_ixs()
+
         distance_list = []
+
         for a in inst_A_list:
             for b in inst_B_list:
                 distance_list.append(dist_mtrx[a,b])
+
         return np.mean(distance_list)
 
     def split(self,labels_cluster):
         if labels_cluster is None:
+
             return [ (None, self.copy()) ]
 
         def get_slice(c, lbl):
@@ -191,7 +207,51 @@ class PdpCurves(object):
         self.r_param = r_param
 
 
+class Pdp2DCurves(object):
 
+
+    def __init__(self, preds,ixs,feat_x, feat_y):
+
+        self._preds = preds
+        self._ixs = ixs
+
+        self.A = feat_y
+        self.B = feat_x
+
+        self._dm = None
+
+        #self.labels_cluster = None
+
+
+    def copy(self):
+
+        return self.__copy__()
+
+    def __copy__(self):
+
+        res = type(self)(self._preds)
+        res.__dict__.update(self.__dict__)
+
+        return res
+
+
+    def get_sample_A(self):
+        return self.sample_A
+
+    def get_sample_B(self):
+        return self.sample_B
+
+    def get_A(self):
+        return self.A
+
+    def get_B(self):
+        return self.B
+
+    def get_data(self):
+        return self._preds
+
+    def get_ixs(self):
+        return self._ixs
     
 
 
@@ -247,6 +307,7 @@ class PartialDependence(object):
                   num_samples=100,
                   scale=None,
                   shift=None):
+
         self.df = df_test
         self.mdl = model
         self.cls_arr = class_array
@@ -258,6 +319,7 @@ class PartialDependence(object):
         self._compute_sampling()
         
     def _compute_sampling(self):
+
         df_test = self.df
         model = self.mdl
         class_array = self.cls_arr
@@ -278,11 +340,15 @@ class PartialDependence(object):
         data_set_pred_index = class_array.index(class_focus)
         lenTest = len(df_test)
         num_feat = len(df_test.columns)
+        
         #ylabel = [df_test.columns[-1]]
+
         xlabel = list(df_test.columns)
         x_array = df_test[xlabel].as_matrix()
+
         #y_array = df_test[ylabel].as_matrix()
         #labs = [True if l[0] in [class_array[0]] else False for l in y_array]
+
         if de_norm_bool:
             x_array = (x_array + shift) * scale
 
@@ -301,11 +367,14 @@ class PartialDependence(object):
         mins = []
         maxs = []
         for laballa in xlabel:
+
             THErightIndex = dictLabtoIndex[laballa]
+
             if de_norm_bool:
                 vectzi = (list(df_test[laballa]) + shift[0][THErightIndex]) * scale[0][THErightIndex]
             else:
                 vectzi = list(df_test[laballa])
+
             mean = np.mean(vectzi)
             maxim = max(vectzi)
             minion = min(vectzi)
@@ -314,6 +383,7 @@ class PartialDependence(object):
             stds.append(standin)
             mins.append(minion)
             maxs.append(maxim)
+
         df_features["max"] = maxs
         df_features["min"] = mins
         df_features["mean"] = means 
@@ -322,7 +392,7 @@ class PartialDependence(object):
 
         df_sample = pd.DataFrame(columns=xlabel)
 
-        eps = 0.01
+        eps = 0
         for laballa in xlabel:
             lower_bound = df_features["min"][laballa] - eps
             higher_bound = df_features["max"][laballa] + eps
@@ -330,6 +400,29 @@ class PartialDependence(object):
             df_sample[laballa] = np.linspace(lower_bound, higher_bound, num_samples)
 
         changing_rows = np.copy(x_array)
+
+        # local sampling
+
+
+        def local_sampling (fix, chosen_row):
+            base_value = chosen_row[dictLabtoIndex[fix]]
+            samplesLeft = list(np.linspace(base_value-1, base_value, int(num_samples / 2) + 1))
+            samplesRight = list(np.linspace(base_value, base_value + 1, int(num_samples / 2) + 1))
+            samples = samplesLeft + samplesRight
+            divisor = int(num_samples / 2 + 1)
+            final_samples = samples[:divisor - 1] + [ base_value ] + samples[divisor + 1:]
+            return final_samples
+
+        list_of_df_local_sampling = []
+
+        for i in range(lenTest):
+            r = changing_rows[i]
+            df = pd.DataFrame()
+
+            for lab in xlabel:
+                df[lab] = local_sampling (lab,r)
+
+            list_of_df_local_sampling.append(df)
         
         self.changing_rows = changing_rows
         self.dictLabtoIndex = dictLabtoIndex
@@ -340,6 +433,7 @@ class PartialDependence(object):
         self.df_sample = df_sample
         self.df_features = df_features
         self.de_norm_bool = de_norm_bool
+        self.list_local_sampling = list_of_df_local_sampling
         
     def pdp(self, fix, chosen_row=None,batch_size=0):
 
@@ -810,11 +904,24 @@ class PartialDependence(object):
             ax.set_xlabel(fix, fontsize=font_size_par)
             ax.set_xlim([original_data_sample[0], original_data_sample[num_samples-1]])
             ax.set_ylim([0, 1])
+
             if not cell_view:
-                #pred = 0
-                ax.text(-0.09, 0.05, class_array[1 - data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
+
                 #pred = 1
-                ax.text(-0.09, 0.95, class_array[data_set_pred_index], fontsize=font_size_par, transform=ax.transAxes)
+                top_label = class_array[data_set_pred_index]
+
+                ax.text(-0.09, 0.95, top_label, fontsize=font_size_par, transform=ax.transAxes)
+
+                #pred = 0
+                origin_label = class_array[1 - data_set_pred_index]
+
+                if len(class_array) > 2:
+                    origin_label = "not "+top_label
+
+                ax.text(-0.09, 0.05, origin_label, fontsize=font_size_par, transform=ax.transAxes)
+
+
+
             else:
                 if clust_number > 15:
                     ax.text(0.5,0.5,"#"+str(label_title_cluster).zfill(2),fontsize=font_size_par+10,transform=ax.transAxes, ha = "center",va = "center",alpha = 0.25)
@@ -823,14 +930,8 @@ class PartialDependence(object):
         
         def pdp_local(fix, allSamples, chosen_row=None):
             
-            def local_sampling (fix, chosen_row, num_samples):
-                base_value = chosen_row[dictLabtoIndex[fix]]
-                samplesLeft = list(np.linspace(base_value-1, base_value, int(num_samples / 2) + 1))
-                samplesRight = list(np.linspace(base_value, base_value + 1, int(num_samples / 2) + 1))
-                samples = samplesLeft + samplesRight
-                divisor = int(num_samples / 2 + 1)
-                final_samples = samples[:divisor - 1] + [ base_value ] + samples[divisor + 1:]
-                return final_samples
+
+            list_local_sampling = self.list_local_sampling
             
             dictLabtoIndex = self.dictLabtoIndex
             rows = self.changing_rows
@@ -842,7 +943,7 @@ class PartialDependence(object):
             depth_index = 0
             i = 0
             for r in rows:
-                sample_vals = local_sampling(fix, r, num_samples)
+                sample_vals = list_local_sampling[i][fix]
                 allSamples[fix + "-o-" + str(i)] = sample_vals
                 #if float(i+1)%10000==0:
                     #print ("---- loading matrix: ", np.round(i/float(num_rows),decimals=2)*100,"%")
@@ -961,6 +1062,7 @@ class PartialDependence(object):
         if local_curves:
             originalIndex = int(num_samples / 2)
             howFarIndex = int(np.ceil(2/100 * num_samples))
+            howFarIndex = max([2,howFarIndex])
             allSamples = {}
 
             the_matrix_local, allSamples = pdp_local(fix,allSamples)
@@ -1258,3 +1360,316 @@ class PartialDependence(object):
                 fig.savefig(path)
             plt.show()
             plt.close("all")
+
+
+
+
+
+    def pdp_2D(self,A,B,instances = None):
+
+        rows = self.changing_rows
+        dictLabtoIndex = self.dictLabtoIndex
+        num_feat = self.num_feat
+        num_samples = self.n_smpl
+        model = self.mdl
+        data_set_pred_index = self.data_set_pred_index
+        original_preds = self.original_preds
+        lenTest = self.lenTest
+        list_local_sampling = self.list_local_sampling
+
+
+
+        def local_sampling_mult (fix, base_value):
+
+            samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
+            samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
+            samples = samplesLeft+samplesRight
+            
+            divisor = int(num_samples/2+1)
+            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+            
+            return final_samples
+
+        def get_data_2d(instance,samples_A,samples_B):
+
+            def compute_pred_2d(matrix_2d):
+
+                num_rows= len(matrix_2d)
+                pred_matrix = np.zeros((num_rows,(num_samples+1)))
+
+                matrix_2d = matrix_2d.reshape((num_rows*(num_samples+1), num_feat))
+
+                ps = model.predict_proba(matrix_2d)
+
+                ps = [x[data_set_pred_index] for x in ps]
+
+                k = 0
+
+                for i in range(0,num_rows*(num_samples+1)):
+                    if i%(num_samples+1) ==0:
+                        pred_matrix[k] = ps[i:i+(num_samples+1)]
+                        k+=1
+
+
+                return pred_matrix
+
+            matrix_to_predict = np.zeros((num_samples+1,num_samples+1,num_feat))
+            row_instance = rows[instance]
+            depthIndex = 0
+
+            for a in sampleA:
+
+                indexHeight = 0
+
+                for b in sampleB:
+
+                    newVector = np.copy(row_instance)
+                    newVector[dictLabtoIndex[A]] = a
+                    newVector[dictLabtoIndex[B]] = b
+                    matrix_to_predict[depthIndex][indexHeight] = newVector
+                    indexHeight+=1
+
+                depthIndex+=1
+
+            preds = compute_pred_2d(matrix_to_predict)
+            original_pred = original_preds[instance]
+            heatmapData = preds - original_pred
+            return heatmapData
+
+        single = False
+        mult = False
+
+        if instances is None:
+            instances = list(range(lenTest))
+            mult = True
+        else:
+            if type(instances) is int:
+                single = True
+
+            elif type(instances) is list:
+
+                if len(instances) == 1:
+                    instances = instances[0]
+                    single = True
+
+                elif len(instances) > 1:
+                    mult = True
+
+                else:
+                    print("instances arg. is not suitable")
+                    return
+
+            else:
+                print("instances arg. is not suitable")
+                return
+
+        if mult:
+            A_center = np.mean(rows[instances,dictLabtoIndex[A]])
+            B_center = np.mean(rows[instances,dictLabtoIndex[B]])
+            sampleA = local_sampling_mult(A, A_center)
+            sampleB = local_sampling_mult(B, B_center)
+
+            heatmap_datas = []
+            orginal_preds = []
+
+            
+            for i in instances:
+                
+                heatmap_data = get_data_2d(i,sampleA,sampleB)
+                
+                heatmap_datas.append(heatmap_data)
+                
+
+            heatmap_data_final = []
+            
+            for i in range(num_samples+1):
+                heatmap_data_final.append(list(np.zeros(num_samples+1)))
+                
+            for heat in heatmap_datas:
+                heatmap_data_final+=heat
+                
+            heatmap_data_final = heatmap_data_final / len(instances)
+
+
+        else:
+
+            sampleA = list_local_sampling[instances][A]
+            sampleB = list_local_sampling[instances][B]
+
+            heatmap_data_final = get_data_2d(instances,sampleA,sampleB)
+        
+        heatmap_curves = Pdp2DCurves(heatmap_data_final,instances,A,B)
+
+        ###############################################
+
+
+        return heatmap_curves
+
+
+    def plot_heatmap( self, curves_input, path = None ):
+
+
+        def local_sampling_mult (fix, base_value):
+
+            samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
+            samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
+            samples = samplesLeft+samplesRight
+            
+            divisor = int(num_samples/2+1)
+            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+            
+            return final_samples
+
+
+        rows = self.changing_rows
+        dictLabtoIndex = self.dictLabtoIndex
+        num_samples = self.n_smpl
+
+        list_local_sampling = self.list_local_sampling
+
+
+        heatmap_data = curves_input.get_data()
+        instances = curves_input.get_ixs()
+        feat_x = curves_input.get_B()
+        feat_y = curves_input.get_A()
+
+        single = False
+        mult = False
+
+        if type(instances) is int:
+            single = True
+
+        elif type(instances) is list:
+
+            if len(instances) == 1:
+                instances = instances[0]
+                single = True
+
+            elif len(instances) > 1:
+                mult = True
+
+            else:
+                print("instances arg. is not suitable")
+                return
+
+        else:
+            print("instances arg. is not suitable")
+            return
+
+
+        if single:
+        #pred_data è xxx
+            color_data = heatmap_data.reshape((-1,))
+            colorScaleParameter = max( [ max(color_data),
+                                         abs(min(color_data)) ] )
+        else:
+        #se mult
+            colorScaleParameter = 0.5
+
+
+        
+        fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
+        
+        f = 24
+        axis.set_title(feat_y+" vs "+feat_x,fontsize=f)
+        axis.set_xlabel(feat_x,fontsize=f-4)
+        axis.set_ylabel(feat_y,fontsize=f-4)
+        
+
+
+
+        
+        image = plt.imread("plus.png")
+
+
+        if mult:
+
+            BA_points = []
+            
+            for i in instances:
+
+                B_v = rows[i,dictLabtoIndex[feat_x]]
+                A_v = rows[i,dictLabtoIndex[feat_y]]
+                BA_points.append((B_v,A_v))
+        
+        A_center = np.mean(rows[instances,dictLabtoIndex[feat_y]])
+        B_center = np.mean(rows[instances,dictLabtoIndex[feat_x]])
+
+
+
+
+        colorScale = mpl.colors.Normalize(vmin=-np.abs(colorScaleParameter),vmax=np.abs(colorScaleParameter))
+        
+
+        if single:
+            sampleA = list_local_sampling[instances][feat_y]
+            sampleB = list_local_sampling[instances][feat_x]
+        else:
+            sampleA = local_sampling_mult(feat_y,A_center)
+            sampleB = local_sampling_mult(feat_x,B_center)
+       
+
+        def ticksCreator(sample):
+            skip_pase = int(np.ceil(num_samples/20))
+            sample = list(sample)[::skip_pase]
+            minVal = sample[0]
+            maxVal = sample[-1]
+            return sample, minVal, maxVal
+
+
+        ticksA, minA, maxA = ticksCreator(sampleA)
+        ticksB, minB, maxB = ticksCreator(sampleB)
+        
+        heat = axis.imshow( heatmap_data, cmap="RdYlBu", norm = colorScale, 
+                            interpolation="none",extent=[minB,maxB,maxA,minA] )
+        divider = make_axes_locatable(axis)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(heat,cax=cax)
+        
+
+
+
+        axis.set_yticks(ticksA, minor=False)
+        axis.set_xticks(ticksB, minor=False)
+            
+        axis.set_xlim(minB, maxB)
+        axis.set_ylim(maxA, minA)
+
+        shift = 0.1
+
+        oldon = [ B_center - shift, 
+                  B_center + shift,
+                  A_center - shift,
+                  A_center + shift ]
+
+        axis.imshow(image,extent=oldon)
+
+        if mult:
+            shiftSmall = 0.05
+
+            for point in BA_points:
+                pointLocation = [point[0]-shiftSmall,point[0]+shiftSmall,point[1]-shiftSmall,point[1]+shiftSmall]
+                axis.imshow(image,extent=pointLocation)
+        
+        dicValueToIndexX = {}
+        dicValueToIndexY = {}
+        for i in range(len(axis.get_xticklabels())):
+            dicValueToIndexX[axis.get_xticks()[i]] = i
+        for i in range(len(axis.get_yticklabels())):
+            dicValueToIndexY[axis.get_yticks()[i]] = i
+
+            
+        axis.get_xticklabels()[dicValueToIndexX[B_center]].set_color('red') 
+        axis.get_yticklabels()[dicValueToIndexY[A_center]].set_color('red')
+        
+        for tick in axis.get_xticklabels():
+            tick.set_rotation(45)
+        
+        if path is not None:
+            if len(path) == 0:
+                path = "heat_map.png"
+            plt.tight_layout()
+            fig.savefig(path)
+        plt.show()
+        plt.close("all")
+

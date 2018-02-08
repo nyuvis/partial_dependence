@@ -105,3 +105,4 @@ ENV/
 # viz printed
 plot_alcohol.png
 plot_alcohol_warped_3.png
+heat_map.png
