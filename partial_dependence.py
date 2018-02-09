@@ -58,8 +58,6 @@ class PdpCurves(object):
         self._dm = None
         self.r_param = None
 
-        #self.labels_cluster = None
-
 
     def copy(self):
 
@@ -135,11 +133,6 @@ class PdpCurves(object):
     def get_ixs(self):
         return self._ixs
 
-    #def write_labels(self,labels_array):
-        #self.labels_cluster = labels_array
-
-    #def get_labels(self):
-        #return self.labels_cluster
 
     def get_preds(self):
         return self._preds
@@ -210,7 +203,7 @@ class PdpCurves(object):
 class Pdp2DCurves(object):
 
 
-    def __init__(self, preds,ixs,feat_x, feat_y):
+    def __init__(self, preds,ixs, feat_y, feat_x):
 
         self._preds = preds
         self._ixs = ixs
@@ -220,7 +213,11 @@ class Pdp2DCurves(object):
 
         self._dm = None
 
-        #self.labels_cluster = None
+        self.sample_A = None
+        self.sample_B = None
+
+        self.center_A = None
+        self.center_B = None
 
 
     def copy(self):
@@ -252,6 +249,16 @@ class Pdp2DCurves(object):
 
     def get_ixs(self):
         return self._ixs
+
+    def set_sample_data(self,A_sample,B_sample,A_center,B_center):
+        self.sample_A = A_sample
+        self.center_A = A_center
+        self.sample_B = B_sample
+        self.center_B = B_center
+
+    def get_sample_data(self):
+
+        return self.sample_A, self.sample_B, self.center_A, self.center_B
     
 
 
@@ -1364,8 +1371,10 @@ class PartialDependence(object):
 
 
 
+        
 
-    def pdp_2D(self,A,B,instances = None):
+
+    def pdp_2D(self,A,B,instances = None, sample_around_mean = False):
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -1378,17 +1387,51 @@ class PartialDependence(object):
         list_local_sampling = self.list_local_sampling
 
 
+        def local_sampling_mult (fix, base_value, based_on_mean=False, min_max = None):
 
-        def local_sampling_mult (fix, base_value):
 
-            samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
-            samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
-            samples = samplesLeft+samplesRight
-            
-            divisor = int(num_samples/2+1)
-            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
-            
+            if based_on_mean:
+
+
+                samplesLeft = list( np.linspace( base_value - 1, 
+                                                 base_value, 
+                                                 int(num_samples / 2) + 1 ) )
+
+                samplesRight = list( np.linspace( base_value, 
+                                                  base_value + 1, 
+                                                  int(num_samples / 2) + 1) )
+
+                samples = samplesLeft + samplesRight
+                
+                divisor = int(num_samples/2+1)
+                final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+
+            else:
+
+                if min_max is not None:
+
+                    min_val = min_max[0]
+                    max_val = min_max[1]
+
+                    samplesLeft = list( np.linspace( min_val, 
+                                                     base_value, 
+                                                     int(num_samples / 2) + 1 ) )
+
+                    samplesRight = list( np.linspace( base_value, 
+                                                      max_val, 
+                                                      int(num_samples / 2) + 1) )
+
+                    samples = samplesLeft + samplesRight
+                    
+                    divisor = int(num_samples/2+1)
+                    final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+
+                else:
+                    print("Error: max and min tuple not provided")
+
             return final_samples
+
+
 
         def get_data_2d(instance,samples_A,samples_B):
 
@@ -1464,10 +1507,34 @@ class PartialDependence(object):
                 return
 
         if mult:
-            A_center = np.mean(rows[instances,dictLabtoIndex[A]])
-            B_center = np.mean(rows[instances,dictLabtoIndex[B]])
-            sampleA = local_sampling_mult(A, A_center)
-            sampleB = local_sampling_mult(B, B_center)
+
+            if sample_around_mean:
+                A_center = np.mean(rows[instances,dictLabtoIndex[A]])
+                B_center = np.mean(rows[instances,dictLabtoIndex[B]])
+
+                sampleA = local_sampling_mult(A, A_center, based_on_mean = True)
+                sampleB = local_sampling_mult(B, B_center, based_on_mean = True)
+
+            else:
+
+                max_value_A = max(rows[instances,dictLabtoIndex[A]])
+                min_value_A = min(rows[instances,dictLabtoIndex[A]])
+                tuple_bounds_A = (min_value_A,max_value_A)
+
+                max_value_B = max(rows[instances,dictLabtoIndex[B]])
+                min_value_B = min(rows[instances,dictLabtoIndex[B]])
+                tuple_bounds_B = (min_value_B,max_value_B)
+
+                A_center =  min_value_A + (tuple_bounds_A[1] - tuple_bounds_A[0]) / 2
+                B_center =  min_value_B + (tuple_bounds_B[1] - tuple_bounds_B[0]) / 2
+
+
+
+                sampleA = local_sampling_mult(A, A_center, min_max = tuple_bounds_A)
+                sampleB = local_sampling_mult(B, B_center, min_max = tuple_bounds_B)
+
+
+
 
             heatmap_datas = []
             orginal_preds = []
@@ -1500,25 +1567,16 @@ class PartialDependence(object):
         
         heatmap_curves = Pdp2DCurves(heatmap_data_final,instances,A,B)
 
+        if mult:
+            heatmap_curves.set_sample_data(sampleA,sampleB,A_center,B_center)
+
         ###############################################
 
 
         return heatmap_curves
 
 
-    def plot_heatmap( self, curves_input, path = None ):
-
-
-        def local_sampling_mult (fix, base_value):
-
-            samplesLeft = list(np.linspace(base_value-1,base_value,int(num_samples/2)+1))
-            samplesRight = list(np.linspace(base_value,base_value+1,int(num_samples/2)+1))
-            samples = samplesLeft+samplesRight
-            
-            divisor = int(num_samples/2+1)
-            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
-            
-            return final_samples
+    def plot_heatmap( self, curves_input, path = None, sample_around_mean = False, for_splom = False):
 
 
         rows = self.changing_rows
@@ -1557,12 +1615,13 @@ class PartialDependence(object):
             return
 
 
-        if single:
-        #pred_data è xxx
-            color_data = heatmap_data.reshape((-1,))
-            colorScaleParameter = max( [ max(color_data),
-                                         abs(min(color_data)) ] )
-        else:
+
+        color_data = heatmap_data.reshape((-1,))
+        colorScaleParameter = max( [ max(color_data),
+                                     abs(min(color_data)) ] )
+
+
+        if for_splom:
         #se mult
             colorScaleParameter = 0.5
 
@@ -1576,12 +1635,6 @@ class PartialDependence(object):
         axis.set_ylabel(feat_y,fontsize=f-4)
         
 
-
-
-        
-        image = plt.imread("plus.png")
-
-
         if mult:
 
             BA_points = []
@@ -1592,8 +1645,7 @@ class PartialDependence(object):
                 A_v = rows[i,dictLabtoIndex[feat_y]]
                 BA_points.append((B_v,A_v))
         
-        A_center = np.mean(rows[instances,dictLabtoIndex[feat_y]])
-        B_center = np.mean(rows[instances,dictLabtoIndex[feat_x]])
+
 
 
 
@@ -1604,9 +1656,15 @@ class PartialDependence(object):
         if single:
             sampleA = list_local_sampling[instances][feat_y]
             sampleB = list_local_sampling[instances][feat_x]
+            A_center = np.mean(rows[instances,dictLabtoIndex[feat_y]])
+            B_center = np.mean(rows[instances,dictLabtoIndex[feat_x]])
         else:
-            sampleA = local_sampling_mult(feat_y,A_center)
-            sampleB = local_sampling_mult(feat_x,B_center)
+
+            sampleA, sampleB, A_center, B_center = curves_input.get_sample_data()
+
+
+
+
        
 
         def ticksCreator(sample):
@@ -1619,9 +1677,14 @@ class PartialDependence(object):
 
         ticksA, minA, maxA = ticksCreator(sampleA)
         ticksB, minB, maxB = ticksCreator(sampleB)
-        
+
+
+
+
+        ext = [minB,maxB,maxA,minA]
         heat = axis.imshow( heatmap_data, cmap="RdYlBu", norm = colorScale, 
-                            interpolation="none",extent=[minB,maxB,maxA,minA] )
+                            extent=ext, aspect = "auto")
+
         divider = make_axes_locatable(axis)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(heat,cax=cax)
@@ -1631,25 +1694,22 @@ class PartialDependence(object):
 
         axis.set_yticks(ticksA, minor=False)
         axis.set_xticks(ticksB, minor=False)
-            
+
+
         axis.set_xlim(minB, maxB)
         axis.set_ylim(maxA, minA)
 
-        shift = 0.1
 
-        oldon = [ B_center - shift, 
-                  B_center + shift,
-                  A_center - shift,
-                  A_center + shift ]
 
-        axis.imshow(image,extent=oldon)
+
+
+        axis.plot(B_center,A_center,"+",markersize=50,color="black")
 
         if mult:
-            shiftSmall = 0.05
 
             for point in BA_points:
-                pointLocation = [point[0]-shiftSmall,point[0]+shiftSmall,point[1]-shiftSmall,point[1]+shiftSmall]
-                axis.imshow(image,extent=pointLocation)
+                axis.plot(point[0],point[1],"+",markersize=25,color="black")
+
         
         dicValueToIndexX = {}
         dicValueToIndexY = {}
@@ -1664,12 +1724,14 @@ class PartialDependence(object):
         
         for tick in axis.get_xticklabels():
             tick.set_rotation(45)
-        
+
+
         if path is not None:
             if len(path) == 0:
                 path = "heat_map.png"
-            plt.tight_layout()
             fig.savefig(path)
+
+        plt.tight_layout()
         plt.show()
         plt.close("all")
 
