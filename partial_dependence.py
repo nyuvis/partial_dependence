@@ -226,7 +226,7 @@ class Pdp2DCurves(object):
 
     def __copy__(self):
 
-        res = type(self)(self._preds)
+        res = type(self)(self._preds, self._ixs, self.A, self.B)
         res.__dict__.update(self.__dict__)
 
         return res
@@ -259,7 +259,22 @@ class Pdp2DCurves(object):
     def get_sample_data(self):
 
         return self.sample_A, self.sample_B, self.center_A, self.center_B
-    
+
+    def swap_features(self):
+
+        swapped_copy = self.copy()
+
+        self._preds = swapped_copy._preds.transpose()
+
+        self.A = swapped_copy.B
+        self.B = swapped_copy.A
+
+        self.sample_A = swapped_copy.sample_B
+        self.center_A = swapped_copy.center_B
+        self.sample_B = swapped_copy.sample_A
+        self.center_B = swapped_copy.center_A
+
+
 
 
 class PartialDependence(object):
@@ -726,6 +741,23 @@ class PartialDependence(object):
         return the_list_sorted
         #curves.write_labels(labels_array)
 
+
+
+    def back_to_the_original(self, data_this, fix):
+
+        dictLabtoIndex = self.dictLabtoIndex
+        de_norm = self.de_norm_bool
+        scale = self.scl
+        shift = self.shft
+
+        if de_norm:
+            integ = dictLabtoIndex[fix]
+            data_that = data_this / scale[0][integ] - shift[0][integ]
+        else:
+            data_that = data_this
+        return data_that
+
+
     def plot(self,
              curves_input,
              color_plot = None,
@@ -785,8 +817,7 @@ class PartialDependence(object):
 
 
         num_samples = self.n_smpl
-        scale = self.scl
-        shift = self.shft
+
 
         data_set_pred_index = self.data_set_pred_index
 
@@ -853,7 +884,7 @@ class PartialDependence(object):
             #cmap = plt.get_cmap("RdYlBu")
             # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
 
-            original_data_sample = back_to_the_orginal(list(df_sample[fix]), fix)
+            original_data_sample = self.back_to_the_original(list(df_sample[fix]), fix)
 
 
             #t = time.time()
@@ -889,7 +920,7 @@ class PartialDependence(object):
 
             else:
                 x_point = changing_rows[indices_from_test, dictLabtoIndex[fix]]
-                x_point = back_to_the_orginal(x_point, fix)
+                x_point = self.back_to_the_original(x_point, fix)
                 y_point = original_preds[indices_from_test]
                 ax.scatter(x_point, y_point, c=ticks_color, s=dot_size)
 
@@ -902,7 +933,7 @@ class PartialDependence(object):
             if chosen_row_preds is not None:
                 ax.plot(original_data_sample,chosen_row_preds,color="red",lw=2)
 
-            the_mean_value = back_to_the_orginal(df_features["mean"][fix], fix)
+            the_mean_value = self.back_to_the_original(df_features["mean"][fix], fix)
             if not cell_view:
                 ax.axvline(x=the_mean_value, color="green", linestyle='--')
                 ax.axhline(y=thresh, color="red", linestyle='--')
@@ -996,16 +1027,6 @@ class PartialDependence(object):
                 return pred_matrix, chosen_row_preds
             return pred_matrix
 
-        def back_to_the_orginal(data_this, fix):
-            dictLabtoIndex = self.dictLabtoIndex
-            de_norm = self.de_norm_bool
-
-            if de_norm:
-                integ = dictLabtoIndex[fix]
-                data_that = data_this / scale[0][integ] - shift[0][integ]
-            else:
-                data_that = data_this
-            return data_that
 
 
         ###########################
@@ -1077,7 +1098,7 @@ class PartialDependence(object):
 
             allSamplesOriginal = {}
             for key in allSamples:
-                allSamplesOriginal[key] = back_to_the_orginal(allSamples[key], key.split("-o-")[0])
+                allSamplesOriginal[key] = self.back_to_the_original(allSamples[key], key.split("-o-")[0])
 
 
         texts1 = []
@@ -1374,7 +1395,7 @@ class PartialDependence(object):
         
 
 
-    def pdp_2D(self,A,B,instances = None, sample_around_mean = False):
+    def pdp_2D(self,A,B,instances = None, zoom_on_mean = False):
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -1508,7 +1529,7 @@ class PartialDependence(object):
 
         if mult:
 
-            if sample_around_mean:
+            if zoom_on_mean:
                 A_center = np.mean(rows[instances,dictLabtoIndex[A]])
                 B_center = np.mean(rows[instances,dictLabtoIndex[B]])
 
@@ -1576,13 +1597,16 @@ class PartialDependence(object):
         return heatmap_curves
 
 
-    def plot_heatmap( self, curves_input, path = None, sample_around_mean = False, for_splom = False):
+
+    def plot_heatmap( self, curves_input, path = None, for_splom = False, plot_object = None):
+
+
 
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
         num_samples = self.n_smpl
-
+        num_feat = self.num_feat
         list_local_sampling = self.list_local_sampling
 
 
@@ -1617,20 +1641,25 @@ class PartialDependence(object):
 
 
         color_data = heatmap_data.reshape((-1,))
-        colorScaleParameter = max( [ max(color_data),
+        color_parameter = max( [ max(color_data),
                                      abs(min(color_data)) ] )
 
 
         if for_splom:
         #se mult
-            colorScaleParameter = 0.5
+            color_parameter = 0.5
 
+        if plot_object is not None:
 
+            axis = plot_object
+
+        else:
         
-        fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
+            fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
         
         f = 24
-        axis.set_title(feat_y+" vs "+feat_x,fontsize=f)
+        if not for_splom:
+            axis.set_title(feat_y+" vs "+feat_x,fontsize=f)
         axis.set_xlabel(feat_x,fontsize=f-4)
         axis.set_ylabel(feat_y,fontsize=f-4)
         
@@ -1643,6 +1672,11 @@ class PartialDependence(object):
 
                 B_v = rows[i,dictLabtoIndex[feat_x]]
                 A_v = rows[i,dictLabtoIndex[feat_y]]
+
+                B_v = self.back_to_the_original(B_v, feat_x)
+                A_v = self.back_to_the_original(A_v, feat_y)
+
+
                 BA_points.append((B_v,A_v))
         
 
@@ -1650,7 +1684,7 @@ class PartialDependence(object):
 
 
 
-        colorScale = mpl.colors.Normalize(vmin=-np.abs(colorScaleParameter),vmax=np.abs(colorScaleParameter))
+        color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
         
 
         if single:
@@ -1663,6 +1697,11 @@ class PartialDependence(object):
             sampleA, sampleB, A_center, B_center = curves_input.get_sample_data()
 
 
+        sampleA = self.back_to_the_original(list(sampleA),feat_y)
+        sampleB = self.back_to_the_original(list(sampleB),feat_x)
+
+        A_center = self.back_to_the_original(A_center,feat_y)
+        B_center = self.back_to_the_original(B_center,feat_x)
 
 
        
@@ -1682,12 +1721,13 @@ class PartialDependence(object):
 
 
         ext = [minB,maxB,maxA,minA]
-        heat = axis.imshow( heatmap_data, cmap="RdYlBu", norm = colorScale, 
+        heat = axis.imshow( heatmap_data, cmap="RdYlBu", norm = color_scale, 
                             extent=ext, aspect = "auto")
 
-        divider = make_axes_locatable(axis)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(heat,cax=cax)
+        if not for_splom:
+            divider = make_axes_locatable(axis)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(heat,cax=cax)
         
 
 
@@ -1700,15 +1740,39 @@ class PartialDependence(object):
         axis.set_ylim(maxA, minA)
 
 
+        size_marker = 50
+        edge_marker = 3
+        marker_style = "+"
+
+        if for_splom:
+            size_marker = size_marker / num_feat
+            edge_marker = edge_marker / num_feat
 
 
 
-        axis.plot(B_center,A_center,"+",markersize=50,color="black")
+        axis.plot(B_center, A_center,
+                  marker=marker_style,
+                  markersize=size_marker,
+                  color="black", 
+                  markeredgewidth=edge_marker)
 
         if mult:
+            if len(instances) > 100:
+                marker_style_small = "o"
+                size_marker_small = size_marker/25
+                edge_marker_small = 1
+
+            else:
+                marker_style_small = marker_style
+                size_marker_small = size_marker/2
+                edge_marker_small = edge_marker/2
 
             for point in BA_points:
-                axis.plot(point[0],point[1],"+",markersize=25,color="black")
+                axis.plot(point[0], point[1], 
+                          marker = marker_style_small, 
+                          markersize=size_marker_small, 
+                          color="black", 
+                          markeredgewidth=edge_marker_small)
 
         
         dicValueToIndexX = {}
@@ -1732,6 +1796,71 @@ class PartialDependence(object):
             fig.savefig(path)
 
         plt.tight_layout()
+
+        if plot_object is None:
+
+            plt.show()
+            plt.close("all")
+
+
+
+    def plot_splom(self, instances_input, path = None):
+
+        num_feat = self.num_feat
+
+        dictLabtoIndex = self.dictLabtoIndex
+
+        lenTest = self.lenTest
+
+        if instances_input is None:
+            instances_input = list(range(lenTest))
+
+        list_feat = list(dictLabtoIndex.keys())
+
+        fig, axes = plt.subplots(nrows=num_feat, ncols=num_feat, figsize=(10.8,10.8),dpi=100)
+
+        pairs_of_features = []
+        for comb in combinations(list(range(num_feat)), 2):
+            pairs_of_features.append(comb)
+
+        for ij in pairs_of_features:
+            i = ij[0]
+            j = ij[1]
+            feat_A = list_feat[i]
+            feat_B = list_feat[j]
+            splom_cell = self.pdp_2D(feat_A, feat_B, instances = instances_input, zoom_on_mean=False)
+            self.plot_heatmap(splom_cell, plot_object=axes[i,j], for_splom = True)
+            axes[i,j].axis("off")
+            splom_cell.swap_features()
+            self.plot_heatmap(splom_cell, plot_object=axes[j,i], for_splom = True)
+            axes[j,i].axis("off")
+
+
+        for d in range(num_feat):
+
+            axes[d,d].annotate( list_feat[d].replace(" ","\n"), 
+                                (0.5, 0.5), 
+                                xycoords='axes fraction',
+                                ha='center', va='center')
+
+            axes[d,d].axis("off")
+
+
+        color_parameter = 0.5
+
+        color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
+
+        cax = fig.add_axes([0.85, 0.05, 0.05, 0.9])
+        cb1 = mpl.colorbar.ColorbarBase(cax, cmap="RdYlBu", norm=color_scale)
+
+
+        fig.subplots_adjust(wspace=0.15, hspace = 0.15, top=0.95, bottom=0.05, left=0.05, right=0.8)
+
+
+        if path is not None:
+            if len(path) == 0:
+                path = "splom.png"
+            fig.savefig(path)
+
         plt.show()
         plt.close("all")
-
