@@ -1745,34 +1745,43 @@ class PartialDependence(object):
         marker_style = "+"
 
         if for_splom:
+
             size_marker = size_marker / num_feat
             edge_marker = edge_marker / num_feat
 
+        else:
 
-
-        axis.plot(B_center, A_center,
-                  marker=marker_style,
-                  markersize=size_marker,
-                  color="black", 
-                  markeredgewidth=edge_marker)
+            axis.plot(B_center, A_center,
+                      marker=marker_style,
+                      markersize=size_marker,
+                      color="black", 
+                      markeredgewidth=edge_marker)
 
         if mult:
-            if len(instances) > 100:
-                marker_style_small = "o"
-                size_marker_small = size_marker/25
-                edge_marker_small = 1
 
-            else:
-                marker_style_small = marker_style
-                size_marker_small = size_marker/2
-                edge_marker_small = edge_marker/2
+            marker_style_small = "+"
+            size_marker_small = 25
+            edge_marker_small = 1.5
+            opacity_small = 1
+
+
+            if len(instances) >= 20:
+                marker_style_small = "."
+                size_marker_small = 10
+                edge_marker_small = 0
+                opacity_small = 0.5
+
+            if for_splom:
+                size_marker_small = 5
+                opacity_small = 0.1
 
             for point in BA_points:
                 axis.plot(point[0], point[1], 
                           marker = marker_style_small, 
-                          markersize=size_marker_small, 
-                          color="black", 
-                          markeredgewidth=edge_marker_small)
+                          markersize = size_marker_small,
+                          markeredgewidth = edge_marker_small, 
+                          color = "black",
+                          alpha = opacity_small)
 
         
         dicValueToIndexX = {}
@@ -1804,7 +1813,7 @@ class PartialDependence(object):
 
 
 
-    def plot_splom(self, instances_input, path = None):
+    def plot_splom(self, instances_input = None, path = None):
 
         num_feat = self.num_feat
 

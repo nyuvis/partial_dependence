@@ -153,6 +153,61 @@ Without customization, plotting the clustering is quite straightforward.
     :height: 900px
     :alt: alternate text
 
+1.6 2D Partial Dependence heatmaps
+################################
+
+It is possible to visualize the increase/decrease in prediction of instances when changing two features at the same time.
+For a single instance the samples vary around the original pair of values.
+You can specify the desired instance by providing the row index integer from ``df_test``.
+In this case we are taking the instance with index 88.
+
+.. code:: python
+	instance_heatmap = my_pdp_plot.pdp_2D("alcohol", "density", instances = 88)
+	my_pdp_plot.plot_heatmap(instance_heatmap)
+
+.. image:: images/single.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+In case you want to visualize the average 2D partial dependence over a set of instances, just provide a list of integers.
+The color will resemble the average increase/decrease across all instances and the samples will vary from min to max values of the set.
+If you want to visualize the average 2D partial dependence across the entire test-set instead..
+
+.. code:: python
+	all_instances = my_pdp_plot.pdp_2D("alcohol", "density")
+	my_pdp_plot.plot_heatmap(all_instances)
+
+.. image:: images/heatmap_test.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+1.7 2D Partial Dependence SPLOMs
+################################
+
+We can combine all the possible heatmaps in a single visualization.
+The SPLOM will show the patterns describing all possible pairs of features partial dependence.
+A stripe of blue/red over a column and row of a feature determines an increase/decrease of prediction when that feature is changed, no matter what other feature varies.
+
+The code to visualize the SPLOM for that same instance 88 is quite simple:
+
+.. code:: python
+	my_pdp_plot.plot_splom(88)
+
+.. image:: images/single_splom.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+The SPLOM can give a vauge hint also over the entire test-set.
+
+.. code:: python
+	my_pdp_plot.plot_splom()
+
 
 ****************************************
 2. Customization and extra functions
