@@ -1,9 +1,9 @@
 partial_dependence
 ==================
 
-A library for plotting partial dependency patterns of machine learning classifiers.
+A library for plotting partial dependence patterns of machine learning classifiers.
 Partial dependence measures the prediction change when changing one or more input features.
-We will focus only on 1D partial dependency plots. 
+We will focus only on 1D partial dependence plots. 
 For each instance in the data we can plot the prediction change as we change a single feature in a defined sample range.
 Then we cluster similar plots, e.g., instances reacting similarly when a feature value changes, to reduce clutter.
 The technique is a black box approach to recognize sets of instances where the model makes similar decisions.
@@ -60,7 +60,7 @@ Optional arguments:
 
 * ``num_samples``: number of desired samples. Sampling a feature is done with:
 
-  ``numpy.linspace(min_value,max_value,num_samples)``
+  ``numpy.linspace(min_value, max_value, num_samples)``
 
   where the bounds are related to min and max value for that feature in the test-set. Default value is 100.
 * ``scale``: scale parameter vector for normalization.
@@ -113,7 +113,7 @@ Required argument:
 
 It is already possible to plot something with the function ``plot()``.
 
-When ever you have a ``PdpCurves`` object available, you can plot something.
+Whenever you have a ``PdpCurves`` object available, you can plot something.
 Here you can find a first example. The visualization is automatically saved in a png file in the same folder of the script.
 
 .. code:: python
@@ -192,7 +192,6 @@ If you want to visualize the average 2D partial dependence across the entire tes
 
 We can combine all the possible heatmaps in a single visualization.
 The SPLOM will show the patterns describing all possible pairs of features partial dependence.
-A stripe of blue/red over a column and row of a feature determines an increase/decrease of prediction when that feature is changed, no matter what other feature varies.
 
 The code to visualize the SPLOM for that same instance 88 is quite simple:
 
@@ -200,13 +199,16 @@ The code to visualize the SPLOM for that same instance 88 is quite simple:
 
 	my_pdp_plot.plot_splom(88)
 
+A stripe of blue/red over a column and row of a feature determines an increase/decrease of prediction when that feature is changed, no matter what other feature varies.
+For example for this particular instance, when changing just two features, an increase in *alcohol* or decrease in *volatile acidity* would generally bring an increase in prediction towards the class *good wine*.
+
 .. image:: images/single_splom.png
     :width: 1080px
     :align: center
     :height: 1080px
     :alt: alternate text
 
-The SPLOM can give a vauge hint also over the entire test-set.
+The SPLOM can give you a hint of average prediction change also over the entire test-set.
 
 .. code:: python
 
