@@ -1665,23 +1665,9 @@ class PartialDependence(object):
         
 
         if mult:
-
-            BA_points = []
-            
-            for i in instances:
-
-                B_v = rows[i,dictLabtoIndex[feat_x]]
-                A_v = rows[i,dictLabtoIndex[feat_y]]
-
-                B_v = self.back_to_the_original(B_v, feat_x)
-                A_v = self.back_to_the_original(A_v, feat_y)
-
-
-                BA_points.append((B_v,A_v))
         
-
-
-
+            A_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_y]], feat_y)
+            B_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_x]], feat_x)
 
 
         color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
@@ -1760,28 +1746,28 @@ class PartialDependence(object):
         if mult:
 
             marker_style_small = "+"
-            size_marker_small = 25
-            edge_marker_small = 1.5
+            size_marker_small = 50
+            edge_marker_small = 2
             opacity_small = 1
 
 
             if len(instances) >= 20:
                 marker_style_small = "."
-                size_marker_small = 10
+                size_marker_small = 40
                 edge_marker_small = 0
                 opacity_small = 0.5
 
             if for_splom:
-                size_marker_small = 5
-                opacity_small = 0.1
+                size_marker_small = 10
+                opacity_small = 0.05
 
-            for point in BA_points:
-                axis.plot(point[0], point[1], 
-                          marker = marker_style_small, 
-                          markersize = size_marker_small,
-                          markeredgewidth = edge_marker_small, 
-                          color = "black",
-                          alpha = opacity_small)
+
+            axis.scatter(B_points, A_points, 
+                         marker = marker_style_small, 
+                         s = size_marker_small,
+                         linewidths = edge_marker_small, 
+                         color = "black",
+                         alpha = opacity_small)
 
         
         dicValueToIndexX = {}

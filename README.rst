@@ -209,10 +209,22 @@ For example for this particular instance, when changing just two features, an in
     :alt: alternate text
 
 The SPLOM can give you a hint of average prediction change also over the entire test-set.
+The visualization combines the 2D scatter plots with the average change in prediction. 
+
+The user can detect global patterns when a same color disposition is present across row and columns of a same feature.
+For example this model generally has an average increase in prediction towards the class *good wine* when the *alcohol* increases with any other feature.
+Dark orange areas and blue areas show where there is an average decrease/increase in prediction.
+For example there is an enclaved blue area within the heatmap cell for *pH* and *total sulfur dioxide* where the prediction generally increases.
 
 .. code:: python
 
 	my_pdp_plot.plot_splom()
+
+.. image:: images/splom_test.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
 
 
 ****************************************
