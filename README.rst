@@ -209,7 +209,7 @@ The code to visualize the SPLOM for that same instance 88 is quite simple:
 The SPLOM can give a vauge hint also over the entire test-set.
 
 .. code:: python
-S
+
 	my_pdp_plot.plot_splom()
 
 
