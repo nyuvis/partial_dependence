@@ -311,12 +311,12 @@ For example let's compare the Random Forest model we had so far with a Support V
 .. code:: python
 
     wine_pdp_plot_SVM = pdp_plot.PartialDependence(df_test,
-                      model_SVM,
-                      labels_name,
-                      labels_focus,
-                      num_samples,
-                      scale_SVM,
-                      shift_SVM)
+                                                    model_SVM,
+                                                    labels_name,
+                                                    labels_focus,
+                                                    num_samples,
+                                                    scale_SVM,
+                                                    shift_SVM)
 
     curves = wine_pdp_plot_SVM.pdp(chosen_feature)
     curves_list_SVM = wine_pdp_plot_SVM.compute_clusters(curves, chosen_cluster_number)
@@ -418,10 +418,10 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
     curves_list_SVM = my_pdp_plot_SVM.compute_clusters( curves_SVM, 25 )
 
     my_pdp_plot_SVM.plot( curves_list_SVM, 
-                          cell_view = True, 
-                          plot_full_curves = True, 
-                          local_curves = False, 
-                          path="plot_alcohol.png" )
+                            cell_view = True, 
+                            plot_full_curves = True, 
+                            local_curves = False, 
+                            path="plot_alcohol.png" )
 
 .. image:: images/SVM_25_all.png
     :width: 1600px
