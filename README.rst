@@ -30,12 +30,6 @@ Following we will show how the pipeline of functions works. Please refer to the 
 
 You can also run the Jupyter notebook file to have a running example. 
 
-Given the heavy visualizations, it is recommended to execute Jupyter with the following command:
-
-.. code:: bash
-
-	jupyter notebook --NotebookApp.iopub_data_rate_limit=10000000000
-
 The visualization we are using as example are coming from a Random Forest model trained on the `UCI Wine Quality Data Set <https://archive.ics.uci.edu/ml/datasets/wine+quality>`_.
 The prediction is towards the class "good wine".
 
@@ -197,7 +191,8 @@ The code to visualize the SPLOM for that same instance 88 is quite simple:
 
 .. code:: python
 
-	my_pdp_plot.plot_splom(88)
+	sploms_objs = my_pdp_plot.get_data_splom(88)
+	my_pdp_plot.plot_splom(sploms_objs)
 
 A stripe of blue/red over a column and row of a feature determines an increase/decrease of prediction when that feature is changed, no matter what other feature varies.
 For example for this particular instance, when changing just two features, an increase in *alcohol* or decrease in *volatile acidity* would generally bring an increase in prediction towards the class *good wine*.
@@ -218,7 +213,8 @@ For example there is an enclaved blue area within the heatmap cell for *pH* and 
 
 .. code:: python
 
-	my_pdp_plot.plot_splom()
+	sploms_objs = my_pdp_plot.get_data_splom()
+	my_pdp_plot.plot_splom(sploms_objs)
 
 .. image:: images/splom_test.png
     :width: 1080px

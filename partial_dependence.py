@@ -70,7 +70,7 @@ class PdpCurves(object):
 
       return res
 
-    def get_mean_distances(self,cluster_A, cluster_B):
+    def get_mean_distances(self, cluster_A, cluster_B):
 
         dist_mtrx = self._dm
         real_A = cluster_A[1]
@@ -94,7 +94,6 @@ class PdpCurves(object):
 
     def split(self,labels_cluster):
         if labels_cluster is None:
-
             return [ (None, self.copy()) ]
 
         def get_slice(c, lbl):
@@ -144,7 +143,7 @@ class PdpCurves(object):
 
     def _compute_dm(self):
         preds = self._preds
-        lenTest = len(self._preds)
+        lenTest = len(preds)
 
         def rmse(curve1, curve2):
             return np.sqrt(((curve1 - curve2) ** 2).mean())
@@ -165,22 +164,17 @@ class PdpCurves(object):
         else:
             lb_keogh_bool = True
 
-        #self.lb_keogh_bool = lb_keogh_bool
-
-        list_of_test_indexes = range(lenTest)
+        list_of_test_indexes = list(range(lenTest))
         pairs_of_curves = []
         for comb in combinations(list_of_test_indexes, 2):
             pairs_of_curves.append(comb)
 
-        k = 0
-        all_total = len(pairs_of_curves)
         distance_matrix = np.zeros((lenTest, lenTest))
-        #start_time = time.time()
+
         for pair in pairs_of_curves:
             i = pair[0]
             j = pair[1]
 
-            k+=1
             if lb_keogh_bool:
                 distance = lb_keogh(preds[i], preds[j], self.r_param)
             else:
@@ -200,14 +194,19 @@ class PdpCurves(object):
         self.r_param = r_param
 
 
+
+
+
+
+
 class Pdp2DCurves(object):
 
 
-    def __init__(self, preds,ixs, feat_y, feat_x):
+    def __init__(self, raw, original_ps, ixs, feat_y, feat_x):
 
-        self._preds = preds
+        self._raw = raw
+        self._origs = original_ps
         self._ixs = ixs
-
         self.A = feat_y
         self.B = feat_x
 
@@ -215,9 +214,7 @@ class Pdp2DCurves(object):
 
         self.sample_A = None
         self.sample_B = None
-
-        self.center_A = None
-        self.center_B = None
+        self.heat_map = None
 
 
     def copy(self):
@@ -226,7 +223,7 @@ class Pdp2DCurves(object):
 
     def __copy__(self):
 
-        res = type(self)(self._preds, self._ixs, self.A, self.B)
+        res = type(self)(self._raw, self._origs, self._ixs, self.A, self.B)
         res.__dict__.update(self.__dict__)
 
         return res
@@ -244,38 +241,162 @@ class Pdp2DCurves(object):
     def get_B(self):
         return self.B
 
+    def compute_heatmap(self):
+        heatmap_datas = []
+        num_samples = self._raw.shape[1]
+        num_inst = len(self._ixs)
+        for i in range(num_inst):
+            single_pdp = self._raw[i]
+            orig_pred = self._origs[i]
+            heatmap_datas.append(single_pdp-orig_pred)
+        
+        heatmap_data_final = []
+        for i in range(num_samples):
+            heatmap_data_final.append(list(np.zeros(num_samples)))
+            
+        for heat in heatmap_datas:
+            heatmap_data_final+=heat
+                    
+        heatmap_data_final = heatmap_data_final / num_inst
+            
+        return heatmap_data_final
+
     def get_data(self):
-        return self._preds
+        if self.heat_map is None:
+            self.heat_map = self.compute_heatmap()
+        return self.heat_map
+
+    def get_preds(self):
+        return self._raw
+
+    def get_origs(self):
+        return self._origs
 
     def get_ixs(self):
         return self._ixs
 
-    def set_sample_data(self,A_sample,B_sample,A_center,B_center):
+    def set_sample_data(self,A_sample,B_sample):
         self.sample_A = A_sample
-        self.center_A = A_center
         self.sample_B = B_sample
-        self.center_B = B_center
 
     def get_sample_data(self):
 
-        return self.sample_A, self.sample_B, self.center_A, self.center_B
+        return self.sample_A, self.sample_B
 
     def swap_features(self):
 
         swapped_copy = self.copy()
 
-        self._preds = swapped_copy._preds.transpose()
+        self.heat_map = swapped_copy.get_data().transpose()
+
+        raws = []
+        for r in swapped_copy._raw:
+           raws.append(r.transpose()) 
+        raws = np.array(raws)
+
+        self._raw = raws
 
         self.A = swapped_copy.B
         self.B = swapped_copy.A
 
         self.sample_A = swapped_copy.sample_B
-        self.center_A = swapped_copy.center_B
         self.sample_B = swapped_copy.sample_A
-        self.center_B = swapped_copy.center_A
+
+    def get_dm(self):
+        if self._dm is None:
+            self._dm = self._compute_dm()
+        return self._dm
+
+    def _compute_dm(self):
+        preds = self._raw
+        lenTest = len(self._ixs)
+
+        def rmse(curve1, curve2):
+            return np.sqrt(((curve1 - curve2) ** 2).mean())
 
 
+        list_of_test_indexes = list(range(lenTest))
 
+        pairs_of_curves = []
+        for comb in combinations(list_of_test_indexes, 2):
+            pairs_of_curves.append(comb)
+
+        distance_matrix = np.zeros((lenTest, lenTest))
+
+        for pair in pairs_of_curves:
+            i = pair[0]
+            j = pair[1]
+
+            distance = rmse(preds[i].reshape((-1,)), preds[j].reshape((-1,)))
+
+            distance_matrix[i, j] = distance
+            distance_matrix[j, i] = distance
+            distance_matrix[i, i] = 0.0
+
+        return distance_matrix
+
+    def get_mean_distances(self, cluster_A, cluster_B):
+
+        dist_mtrx = self._dm
+        real_A = cluster_A[1]
+        real_B = cluster_B[1]
+        lab_A = cluster_A[0]
+        lab_B = cluster_B[0]
+
+        if lab_A == lab_B:
+            return 1.1
+
+        inst_A_list = real_A.get_ixs()
+        inst_B_list = real_B.get_ixs()
+
+        distance_list = []
+
+        for a in inst_A_list:
+            for b in inst_B_list:
+                distance_list.append(dist_mtrx[a,b])
+
+        return np.mean(distance_list)
+
+    def split(self,labels_cluster):
+
+        if labels_cluster is None:
+            return [ (None, self.copy()) ]
+
+        def get_slice(c, lbl):
+            c._raw = self._raw[labels_cluster == lbl, :]
+            if self._dm is not None:
+                c._dm = self._dm[labels_cluster == lbl, :][:, labels_cluster == lbl]
+            c._ixs = self._ixs[labels_cluster == lbl]
+            c._origs = self._origs[labels_cluster == lbl]
+            c.heat_map = c.compute_heatmap()
+
+            return c
+
+        def get_macro_dist(clusters_input):
+            
+            pairs_of_clusters = []
+            for comb in combinations(list_of_clusters, 2):
+                pairs_of_clusters.append(comb)
+
+            num_cluster_here = len(list_of_clusters)
+            macro_dist_matrix = np.zeros((num_cluster_here,num_cluster_here))
+
+            for i in list_of_clusters:
+                for j in list_of_clusters:
+                    macro_dist_matrix[i,j] = self.get_mean_distances(clusters_input[i],
+                                                                     clusters_input[j])
+
+            return macro_dist_matrix
+
+
+        list_of_clusters = np.unique(labels_cluster)
+
+        curves_list = []
+        for lbl in list_of_clusters:
+            the_slice = get_slice(self.copy(), lbl)
+            curves_list.append((lbl, the_slice)) 
+
+        return (curves_list,get_macro_dist(curves_list))
 
 class PartialDependence(object):
 
@@ -697,7 +818,6 @@ class PartialDependence(object):
         #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
         self.dist_matrix = distance_matrix
         labels_array = clust.labels_
-
         goal = curves.split(labels_array)
         the_list = goal[0]
         the_matrix_for_sorting = goal[1]
@@ -706,7 +826,7 @@ class PartialDependence(object):
         for cl in the_list:
             size_new = len(cl[1].get_ixs())
             
-            if size_new>size:
+            if size_new > size:
                 size = size_new
                 label_biggest = cl[0]
 
@@ -822,15 +942,14 @@ class PartialDependence(object):
         data_set_pred_index = self.data_set_pred_index
 
 
-        def plotting_prediction_changes(
-                single_curve_object, 
-                color_curve = "blue",
-                spag = False, 
-                pred_spag = None, 
-                chosen_row_preds = None, 
-                full_curves = False,
-                plot_object = None,
-                ticks_color = "black"):
+        def plotting_prediction_changes( single_curve_object, 
+                                        color_curve = "blue",
+                                        spag = False, 
+                                        pred_spag = None, 
+                                        chosen_row_preds = None, 
+                                        full_curves = False,
+                                        plot_object = None,
+                                        ticks_color = "black"):
 
 
 
@@ -894,7 +1013,7 @@ class PartialDependence(object):
                 ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)
             elif cell_view and multi_clusters:
                 if clust_number <= 15:
-                    ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2, fontsize=font_size_par)
+                    ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2.split(" : ")[1], fontsize=font_size_par)
                 else:
                     ax.set_title("")
             else:
@@ -1190,9 +1309,6 @@ class PartialDependence(object):
                             axes_plot.xaxis.set_ticklabels([])
 
 
-
-
-
         else:
             if color_plot is None:
                 color_plot = "blue"
@@ -1390,25 +1506,9 @@ class PartialDependence(object):
             plt.close("all")
 
 
+    def local_sampling_mult (self, fix, base_value, based_on_mean=False, min_max = None):
 
-
-        
-
-
-    def pdp_2D(self,A,B,instances = None, zoom_on_mean = False):
-
-        rows = self.changing_rows
-        dictLabtoIndex = self.dictLabtoIndex
-        num_feat = self.num_feat
-        num_samples = self.n_smpl
-        model = self.mdl
-        data_set_pred_index = self.data_set_pred_index
-        original_preds = self.original_preds
-        lenTest = self.lenTest
-        list_local_sampling = self.list_local_sampling
-
-
-        def local_sampling_mult (fix, base_value, based_on_mean=False, min_max = None):
+            num_samples = self.n_smpl
 
 
             if based_on_mean:
@@ -1451,6 +1551,19 @@ class PartialDependence(object):
                     print("Error: max and min tuple not provided")
 
             return final_samples
+
+
+    def pdp_2D(self,A,B,instances = None, sample_data = None, zoom_on_mean = False):
+
+        rows = self.changing_rows
+        dictLabtoIndex = self.dictLabtoIndex
+        num_feat = self.num_feat
+        num_samples = self.n_smpl
+        model = self.mdl
+        data_set_pred_index = self.data_set_pred_index
+        original_preds = self.original_preds
+        lenTest = self.lenTest
+        list_local_sampling = self.list_local_sampling
 
 
 
@@ -1497,8 +1610,7 @@ class PartialDependence(object):
 
             preds = compute_pred_2d(matrix_to_predict)
             original_pred = original_preds[instance]
-            heatmapData = preds - original_pred
-            return heatmapData
+            return preds, original_pred
 
         single = False
         mult = False
@@ -1527,81 +1639,83 @@ class PartialDependence(object):
                 print("instances arg. is not suitable")
                 return
 
-        if mult:
+        if sample_data is None:
 
-            if zoom_on_mean:
-                A_center = np.mean(rows[instances,dictLabtoIndex[A]])
-                B_center = np.mean(rows[instances,dictLabtoIndex[B]])
+            if mult:
 
-                sampleA = local_sampling_mult(A, A_center, based_on_mean = True)
-                sampleB = local_sampling_mult(B, B_center, based_on_mean = True)
+                if zoom_on_mean:
+
+                    A_center = np.mean(rows[instances,dictLabtoIndex[A]])
+                    B_center = np.mean(rows[instances,dictLabtoIndex[B]])
+
+                    sampleA = self.local_sampling_mult(A, A_center, based_on_mean = True)
+                    sampleB = self.local_sampling_mult(B, B_center, based_on_mean = True)
+
+                else:
+
+                    max_value_A = max(rows[instances,dictLabtoIndex[A]])
+                    min_value_A = min(rows[instances,dictLabtoIndex[A]])
+                    tuple_bounds_A = (min_value_A,max_value_A)
+
+                    max_value_B = max(rows[instances,dictLabtoIndex[B]])
+                    min_value_B = min(rows[instances,dictLabtoIndex[B]])
+                    tuple_bounds_B = (min_value_B,max_value_B)
+
+                    A_center =  min_value_A + (tuple_bounds_A[1] - tuple_bounds_A[0]) / 2
+                    B_center =  min_value_B + (tuple_bounds_B[1] - tuple_bounds_B[0]) / 2
+
+                    sampleA = self.local_sampling_mult(A, A_center, min_max = tuple_bounds_A)
+                    sampleB = self.local_sampling_mult(B, B_center, min_max = tuple_bounds_B)
 
             else:
 
-                max_value_A = max(rows[instances,dictLabtoIndex[A]])
-                min_value_A = min(rows[instances,dictLabtoIndex[A]])
-                tuple_bounds_A = (min_value_A,max_value_A)
-
-                max_value_B = max(rows[instances,dictLabtoIndex[B]])
-                min_value_B = min(rows[instances,dictLabtoIndex[B]])
-                tuple_bounds_B = (min_value_B,max_value_B)
-
-                A_center =  min_value_A + (tuple_bounds_A[1] - tuple_bounds_A[0]) / 2
-                B_center =  min_value_B + (tuple_bounds_B[1] - tuple_bounds_B[0]) / 2
-
-
-
-                sampleA = local_sampling_mult(A, A_center, min_max = tuple_bounds_A)
-                sampleB = local_sampling_mult(B, B_center, min_max = tuple_bounds_B)
-
-
-
-
-            heatmap_datas = []
-            orginal_preds = []
-
-            
-            for i in instances:
-                
-                heatmap_data = get_data_2d(i,sampleA,sampleB)
-                
-                heatmap_datas.append(heatmap_data)
-                
-
-            heatmap_data_final = []
-            
-            for i in range(num_samples+1):
-                heatmap_data_final.append(list(np.zeros(num_samples+1)))
-                
-            for heat in heatmap_datas:
-                heatmap_data_final+=heat
-                
-            heatmap_data_final = heatmap_data_final / len(instances)
-
+                sampleA = list_local_sampling[instances][A]
+                sampleB = list_local_sampling[instances][B]
 
         else:
 
-            sampleA = list_local_sampling[instances][A]
-            sampleB = list_local_sampling[instances][B]
 
-            heatmap_data_final = get_data_2d(instances,sampleA,sampleB)
-        
-        heatmap_curves = Pdp2DCurves(heatmap_data_final,instances,A,B)
+            sampleA = sample_data[0]
+            sampleB = sample_data[1]
+
+
 
         if mult:
-            heatmap_curves.set_sample_data(sampleA,sampleB,A_center,B_center)
+
+            orginal_preds = []
+            raw_preds_all = []
+            orig_pred_list = []
+
+            for i in instances:
+                
+                raw_preds, orig_pred = get_data_2d(i,sampleA,sampleB)
+                
+                raw_preds_all.append(raw_preds)
+                orig_pred_list.append(orig_pred)
+                
+
+            raw_preds_all = np.array(raw_preds_all)
+            orig_pred_list = np.array(orig_pred_list)
+
+        else:
+
+            raw_preds, orig_pred = get_data_2d(instances, sampleA, sampleB)
+            raw_preds_all = np.array([raw_preds])
+            orig_pred_list = np.array([orig_pred])
+            instances = [instances]
+
+        heatmap_curves = Pdp2DCurves(raw_preds_all, orig_pred_list, np.array(instances), A, B)
+
+        if mult:
+
+            heatmap_curves.set_sample_data(sampleA,sampleB)
 
         ###############################################
-
 
         return heatmap_curves
 
 
-
-    def plot_heatmap( self, curves_input, path = None, for_splom = False, plot_object = None):
-
-
-
+    def plot_heatmap( self, curves_objs, path = None, for_splom = False, plot_object = None):        
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -1609,197 +1723,282 @@ class PartialDependence(object):
         num_feat = self.num_feat
         list_local_sampling = self.list_local_sampling
 
+        def single_heatmap (curves_input, for_splom = for_splom, plot_obj = plot_object, clustering = False):
 
-        heatmap_data = curves_input.get_data()
-        instances = curves_input.get_ixs()
-        feat_x = curves_input.get_B()
-        feat_y = curves_input.get_A()
+            if type(curves_input) is tuple:
+                label_cluster = curves_input[0]
+                curves_input = curves_input[1]
 
-        single = False
-        mult = False
+            heatmap_data = curves_input.get_data()
+            instances = list(curves_input.get_ixs())
+            size = str(len(instances))
+            feat_x = curves_input.get_B()
+            feat_y = curves_input.get_A()
 
-        if type(instances) is int:
-            single = True
+            single = False
+            mult = False
 
-        elif type(instances) is list:
-
-            if len(instances) == 1:
-                instances = instances[0]
+            if type(instances) is int:
                 single = True
 
-            elif len(instances) > 1:
-                mult = True
+            elif type(instances) is list:
+
+                if len(instances) == 1:
+                    instances = instances[0]
+                    single = True
+
+
+                elif len(instances) > 1:
+                    mult = True
+
+                else:
+                    print("instances arg. is not suitable")
+                    return
 
             else:
                 print("instances arg. is not suitable")
                 return
 
-        else:
-            print("instances arg. is not suitable")
-            return
 
-
-
-        color_data = heatmap_data.reshape((-1,))
-        color_parameter = max( [ max(color_data),
+            color_data = heatmap_data.reshape((-1,))
+            color_parameter = max( [ max(color_data),
                                      abs(min(color_data)) ] )
 
 
-        if for_splom:
-        #se mult
-            color_parameter = 0.5
+            if for_splom or clustering:
+            #se mult
+                color_parameter = 0.5
 
-        if plot_object is not None:
+            if plot_obj is not None:
 
-            axis = plot_object
+                axis = plot_obj
 
-        else:
-        
-            fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
-        
-        f = 24
-        if not for_splom:
-            axis.set_title(feat_y+" vs "+feat_x,fontsize=f)
-        axis.set_xlabel(feat_x,fontsize=f-4)
-        axis.set_ylabel(feat_y,fontsize=f-4)
-        
-
-        if mult:
-        
-            A_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_y]], feat_y)
-            B_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_x]], feat_x)
+            else:
+            
+                fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
+            
+            if not for_splom and not clustering:
+                axis.set_title(feat_y+" vs "+feat_x, fontsize=font_size_par+4)
+            elif clustering:
+                axis.set_title("Cluster "+str(label_cluster)+ " - size: "+size, fontsize=font_size_par)
 
 
-        color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
-        
+            axis.set_xlabel(feat_x,fontsize= font_size_par)
+            axis.set_ylabel(feat_y,fontsize= font_size_par)
+            
 
-        if single:
-            sampleA = list_local_sampling[instances][feat_y]
-            sampleB = list_local_sampling[instances][feat_x]
-            A_center = np.mean(rows[instances,dictLabtoIndex[feat_y]])
-            B_center = np.mean(rows[instances,dictLabtoIndex[feat_x]])
-        else:
-
-            sampleA, sampleB, A_center, B_center = curves_input.get_sample_data()
+            if mult:
+            
+                A_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_y]], feat_y)
+                B_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_x]], feat_x)
 
 
-        sampleA = self.back_to_the_original(list(sampleA),feat_y)
-        sampleB = self.back_to_the_original(list(sampleB),feat_x)
+            color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
+            
 
-        A_center = self.back_to_the_original(A_center,feat_y)
-        B_center = self.back_to_the_original(B_center,feat_x)
+            if single and not clustering:
+                sampleA = list_local_sampling[instances][feat_y]
+                sampleB = list_local_sampling[instances][feat_x]
+
+            else:
+
+                sampleA, sampleB = curves_input.get_sample_data()
+            
+            div_index = int(num_samples/2)
+            A_center = sampleA[div_index]
+            B_center = sampleB[div_index]
 
 
-       
 
-        def ticksCreator(sample):
-            skip_pase = int(np.ceil(num_samples/20))
-            sample = list(sample)[::skip_pase]
-            minVal = sample[0]
-            maxVal = sample[-1]
-            return sample, minVal, maxVal
+            sampleA = self.back_to_the_original(list(sampleA),feat_y)
+            sampleB = self.back_to_the_original(list(sampleB),feat_x)
 
-
-        ticksA, minA, maxA = ticksCreator(sampleA)
-        ticksB, minB, maxB = ticksCreator(sampleB)
+            A_center = self.back_to_the_original(A_center,feat_y)
+            B_center = self.back_to_the_original(B_center,feat_x)
 
 
 
 
-        ext = [minB,maxB,maxA,minA]
-        heat = axis.imshow( heatmap_data, cmap="RdYlBu", norm = color_scale, 
-                            extent=ext, aspect = "auto")
+            def ticksCreator(sample,num_ticks):
+                
+                skip_pase = int(np.ceil(num_samples/num_ticks))
+                sample = list(sample)[::skip_pase]
+                minVal = sample[0]
+                maxVal = sample[-1]
+                return sample, minVal, maxVal
 
-        if not for_splom:
-            divider = make_axes_locatable(axis)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(heat,cax=cax)
-        
+            # num_ticks has to be an even integer number
+            num_ticks = 20
 
-
-
-        axis.set_yticks(ticksA, minor=False)
-        axis.set_xticks(ticksB, minor=False)
-
-
-        axis.set_xlim(minB, maxB)
-        axis.set_ylim(maxA, minA)
+            ticksA, minA, maxA = ticksCreator(sampleA,num_ticks)
+            ticksB, minB, maxB = ticksCreator(sampleB,num_ticks)
 
 
-        size_marker = 50
-        edge_marker = 3
-        marker_style = "+"
-
-        if for_splom:
-
-            size_marker = size_marker / num_feat
-            edge_marker = edge_marker / num_feat
-
-        else:
-
-            axis.plot(B_center, A_center,
-                      marker=marker_style,
-                      markersize=size_marker,
-                      color="black", 
-                      markeredgewidth=edge_marker)
-
-        if mult:
-
-            marker_style_small = "+"
-            size_marker_small = 50
-            edge_marker_small = 2
-            opacity_small = 1
 
 
-            if len(instances) >= 20:
-                marker_style_small = "."
-                size_marker_small = 40
-                edge_marker_small = 0
-                opacity_small = 0.5
+            ext = [minB,maxB,maxA,minA]
+            heat = axis.imshow( heatmap_data, 
+                                cmap="RdYlBu", norm = color_scale, 
+                                extent=ext, aspect = "auto")
+
+            if not for_splom and not clustering:
+                divider = make_axes_locatable(axis)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                plt.colorbar(heat,cax=cax)
+            
+
+
+
+            axis.set_yticks(ticksA, minor=False)
+            axis.set_xticks(ticksB, minor=False)
+
+
+            axis.set_xlim(minB, maxB)
+            axis.set_ylim(maxA, minA)
+
+
+            size_marker = 50
+            edge_marker = 3
+            marker_style = "+"
 
             if for_splom:
-                size_marker_small = 10
-                opacity_small = 0.05
+
+                size_marker = size_marker / num_feat
+                edge_marker = edge_marker / num_feat
+
+            else:
+
+                axis.plot(B_center, A_center,
+                          marker=marker_style,
+                          markersize=size_marker,
+                          color="black", 
+                          markeredgewidth=edge_marker)
+
+            if mult:
+
+                if len(instances) > 100:
+                    marker_style_small = "."
+                    size_marker_small = 40
+                    edge_marker_small = 0
+                    opacity_small = 0.5
+
+                    if for_splom:
+                        size_marker_small = size_marker_small / max(1,np.ceil(num_feat/3))
+                        opacity_small = 0.05
+
+                else:
+                    marker_style_small = "+"
+                    size_marker_small = 50
+                    edge_marker_small = 2
+
+                    if len(instances) > 10:
+                        opacity_small = 0.25
+                    else:
+                        opacity_small = 1
 
 
-            axis.scatter(B_points, A_points, 
-                         marker = marker_style_small, 
-                         s = size_marker_small,
-                         linewidths = edge_marker_small, 
-                         color = "black",
-                         alpha = opacity_small)
+                    if for_splom:
+                        marker_style_small = "."
+                        edge_marker_small = 0
+                        size_marker_small = 40 / max(1,np.ceil(num_feat/3))
 
-        
-        dicValueToIndexX = {}
-        dicValueToIndexY = {}
-        for i in range(len(axis.get_xticklabels())):
-            dicValueToIndexX[axis.get_xticks()[i]] = i
-        for i in range(len(axis.get_yticklabels())):
-            dicValueToIndexY[axis.get_yticks()[i]] = i
 
+                axis.scatter(B_points, A_points, 
+                             marker = marker_style_small, 
+                             s = size_marker_small,
+                             linewidths = edge_marker_small, 
+                             color = "black",
+                             alpha = opacity_small)
+
+            middle_tick = int(num_ticks/2)
+            axis.get_xticklabels()[middle_tick].set_color('red') 
+            axis.get_yticklabels()[middle_tick].set_color('red')
             
-        axis.get_xticklabels()[dicValueToIndexX[B_center]].set_color('red') 
-        axis.get_yticklabels()[dicValueToIndexY[A_center]].set_color('red')
-        
-        for tick in axis.get_xticklabels():
-            tick.set_rotation(45)
+            for tick in axis.get_xticklabels():
+                tick.set_rotation(45)
+
+            if clustering:
+                if row_plot != grid_heigth -1:
+                    axis.set_xlabel("",fontsize= font_size_par)
+                if col_plot != 0:
+                    axis.set_ylabel("",fontsize= font_size_par)
 
 
-        if path is not None:
-            if len(path) == 0:
-                path = "heat_map.png"
-            fig.savefig(path)
 
-        plt.tight_layout()
+
+        clust_flag = False
+        if type(curves_objs) is list:
+            clust_flag = True
+            clust_number = len(curves_objs)
+
+            if plot_object is not None:
+
+                axis = plot_object
+
+            else:
+
+                grid_heigth = int(np.ceil(np.sqrt(clust_number)))
+                grid_width = int(np.ceil(clust_number / grid_heigth))
+
+
+                col_plot_init = -1
+                row_plot_init = 0
+
+                fig, ax = plt.subplots( figsize=(10.8,10.8), nrows=grid_heigth, ncols=grid_width, dpi=100)
+
+                for i in range(clust_number):
+
+                    if i /  grid_heigth < col_plot_init + 1:
+
+                        col_plot = col_plot_init 
+                        row_plot = row_plot_init + 1
+                    else:
+                        col_plot = col_plot_init + 1
+                        row_plot = 0
+
+                    axes_plot = ax[row_plot,col_plot]
+
+                    col_plot_init = col_plot
+                    row_plot_init = row_plot
+                    
+                    font_size_par = 15
+
+                    single_heatmap (curves_objs[i], plot_obj = axes_plot, clustering = True)
+        else:
+            font_size_par = 20
+            single_heatmap (curves_objs)
+
+            plt.tight_layout()
 
         if plot_object is None:
+
+            if clust_flag:
+                color_parameter = 0.5
+
+                color_scale = mpl.colors.Normalize(vmin = -np.abs(color_parameter), vmax = np.abs(color_parameter))
+
+                cax = fig.add_axes([0.85, 0.05, 0.05, 0.9])
+                cb1 = mpl.colorbar.ColorbarBase(cax, cmap = "RdYlBu", norm = color_scale)
+
+
+                fig.subplots_adjust(wspace=0.15, hspace = 0.6, top=0.95, bottom=0.05, left=0.05, right=0.8)
+                
+
+
+            if path is not None:
+                if len(path) == 0:
+                    path = "heat_map.png"
+                fig.savefig(path)
 
             plt.show()
             plt.close("all")
 
 
+    
 
-    def plot_splom(self, instances_input = None, path = None):
+
+
+    def get_data_splom(self, instances_input = None, zoom_on_mean = False):
 
         num_feat = self.num_feat
 
@@ -1807,8 +2006,106 @@ class PartialDependence(object):
 
         lenTest = self.lenTest
 
+        rows = self.changing_rows
+
+        list_local_sampling = self.list_local_sampling
+
+
+        single = False
+        mult = False
+
         if instances_input is None:
             instances_input = list(range(lenTest))
+            mult = True
+        else:
+            if type(instances_input) is int:
+                single = True
+
+            elif type(instances_input) is list:
+
+                if len(instances_input) == 1:
+                    instances_input = instances[0]
+                    single = True
+
+                elif len(instances_input) > 1:
+                    mult = True
+
+                else:
+                    print("instances arg. is not suitable")
+                    return
+
+            else:
+                print("instances arg. is not suitable")
+                return
+
+        list_feat = list(dictLabtoIndex.keys())
+
+        pairs_of_features = []
+        for comb in combinations(list(range(num_feat)), 2):
+            pairs_of_features.append(comb)
+
+        df_sample_splom = pd.DataFrame()
+
+        for feat in list_feat:
+
+            if mult:
+
+                if zoom_on_mean:
+
+                    center = np.mean(rows[instances_input,dictLabtoIndex[feat]])
+
+                    sample = self.local_sampling_mult(feat, center, based_on_mean = True)
+
+                else:
+
+                    max_value = max(rows[instances_input,dictLabtoIndex[feat]])
+                    min_value = min(rows[instances_input,dictLabtoIndex[feat]])
+                    tuple_bounds = (min_value, max_value)
+
+                    center =  min_value + (tuple_bounds[1] - tuple_bounds[0]) / 2
+
+                    sample = self.local_sampling_mult(feat, center, min_max = tuple_bounds)
+
+            else:
+
+                sample = list_local_sampling[instances_input][feat]
+
+
+            df_sample_splom[feat] = sample
+
+        cell_object_dict = {}
+
+        for ij in pairs_of_features:
+            i = ij[0]
+            j = ij[1]
+            feat_A = list_feat[i]
+            feat_B = list_feat[j]
+
+            A_sample = df_sample_splom[feat_A]
+            B_sample = df_sample_splom[feat_B]
+
+
+            splom_cell = self.pdp_2D( feat_A, 
+                                      feat_B, 
+                                      instances_input, 
+                                      sample_data = (A_sample, B_sample), 
+                                      zoom_on_mean = zoom_on_mean)
+
+
+            cell_object_dict[ij] = splom_cell
+
+        return cell_object_dict
+
+
+
+
+    def plot_splom(self, heatmaps_objects, path = None):
+
+        num_feat = self.num_feat
+
+        dictLabtoIndex = self.dictLabtoIndex
+
+        lenTest = self.lenTest
 
         list_feat = list(dictLabtoIndex.keys())
 
@@ -1821,9 +2118,7 @@ class PartialDependence(object):
         for ij in pairs_of_features:
             i = ij[0]
             j = ij[1]
-            feat_A = list_feat[i]
-            feat_B = list_feat[j]
-            splom_cell = self.pdp_2D(feat_A, feat_B, instances = instances_input, zoom_on_mean=False)
+            splom_cell = heatmaps_objects[ij]
             self.plot_heatmap(splom_cell, plot_object=axes[i,j], for_splom = True)
             axes[i,j].axis("off")
             splom_cell.swap_features()
@@ -1843,10 +2138,10 @@ class PartialDependence(object):
 
         color_parameter = 0.5
 
-        color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
+        color_scale = mpl.colors.Normalize(vmin = -np.abs(color_parameter), vmax = np.abs(color_parameter))
 
         cax = fig.add_axes([0.85, 0.05, 0.05, 0.9])
-        cb1 = mpl.colorbar.ColorbarBase(cax, cmap="RdYlBu", norm=color_scale)
+        cb1 = mpl.colorbar.ColorbarBase(cax, cmap = "RdYlBu", norm = color_scale)
 
 
         fig.subplots_adjust(wspace=0.15, hspace = 0.15, top=0.95, bottom=0.05, left=0.05, right=0.8)
