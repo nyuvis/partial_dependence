@@ -18,13 +18,13 @@ and import it in python using:
 
 .. code:: python
 
-	import partial_dependence as pdp_plot
+    import partial_dependence as pdp_plot
 
 
 
-****************************************
+********************************************
 1. Plotting clustering of partial dependence
-****************************************
+********************************************
 
 Following we will show how the pipeline of functions works. Please refer to the inline documentation of the methods for full information.
 
@@ -34,7 +34,7 @@ The visualization we are using as example are coming from a Random Forest model 
 The prediction is towards the class "good wine".
 
 1.1 Initialization
-##############
+##################
 
 Required arguments:
 *******************
@@ -75,15 +75,15 @@ If our model does not use normalization, we can initialize the tool this way:
 
 .. code:: python
 
-	my_pdp_plot = pdp_plot.PartialDependence( my_df_test,
-	                                          my_model,
-	                                          my_labels_name,
-	                                          my_labels_focus )
+    my_pdp_plot = pdp_plot.PartialDependence( my_df_test,
+                                              my_model,
+                                              my_labels_name,
+                                              my_labels_focus )
 
 
 
 1.2 Creating the PdpCurves object
-##############################
+#################################
 
 By choosing a feature and changing it in the sample range, for each row in the test-set we can create ``num_samples`` different versions of the original instance.
 
@@ -100,10 +100,10 @@ Required argument:
 
 .. code:: python
 
-	curves = my_pdp_plot.pdp( chosen_feature )
+    curves = my_pdp_plot.pdp( chosen_feature )
 
 1.3 Getting an overview of the partial dependence
-#############################################
+#################################################
 
 It is already possible to plot something with the function ``plot()``.
 
@@ -112,7 +112,7 @@ Here you can find a first example. The visualization is automatically saved in a
 
 .. code:: python
 
-	my_pdp_plot.plot( curves, local_curves = True, plot_full_curves = True )
+    my_pdp_plot.plot( curves, local_curves = True, plot_full_curves = True )
 
 .. image:: images/full_curves.png
     :width: 1600px
@@ -120,8 +120,8 @@ Here you can find a first example. The visualization is automatically saved in a
     :height: 900px
     :alt: alternate text
 
-1.4 Clustering the partial dependence
-#################################
+1.4 Clustering 1D partial dependence
+####################################
 
 To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide ``curves``.
 
@@ -129,17 +129,17 @@ The function returns a list of ``PdpCurves`` objects. Each element of the list i
 
 .. code:: python
 
-	curves_list_RF = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+    curves_list_RF = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 
 1.5 Plotting the clustering results
-################################
+###################################
 
 Without customization, plotting the clustering is quite straightforward.
 
 .. code:: python
 
-	my_pdp_plot.plot( curves_list_RF )
+    my_pdp_plot.plot( curves_list_RF )
 
 .. image:: images/clustering.png
     :width: 1600px
@@ -147,8 +147,8 @@ Without customization, plotting the clustering is quite straightforward.
     :height: 900px
     :alt: alternate text
 
-1.6 Two-Dimensional Partial Dependence heatmaps
-##############################################
+1.6 2D partial dependence heatmaps
+##################################
 
 It is possible to visualize the increase/decrease in prediction of instances when changing two features at the same time.
 For a single instance the samples vary around the original pair of values.
@@ -157,8 +157,8 @@ In this case we are taking the instance with index 88.
 
 .. code:: python
 
-	instance_heatmap = my_pdp_plot.pdp_2D("alcohol", "density", instances = 88)
-	my_pdp_plot.plot_heatmap(instance_heatmap)
+    instance_heatmap = my_pdp_plot.pdp_2D("alcohol", "density", instances = 88)
+    my_pdp_plot.plot_heatmap(instance_heatmap)
 
 .. image:: images/single.png
     :width: 1080px
@@ -172,8 +172,8 @@ If you want to visualize the average 2D partial dependence across the entire tes
 
 .. code:: python
 
-	all_instances = my_pdp_plot.pdp_2D("alcohol", "density")
-	my_pdp_plot.plot_heatmap(all_instances)
+    all_inst = my_pdp_plot.pdp_2D("alcohol", "density")
+    my_pdp_plot.plot_heatmap(all_inst)
 
 .. image:: images/heatmap_test.png
     :width: 1080px
@@ -181,8 +181,30 @@ If you want to visualize the average 2D partial dependence across the entire tes
     :height: 1080px
     :alt: alternate text
 
-1.7 Two-Dimensional Partial Dependence SPLOMs
-##########################################
+1.7 Clustering 2D partial dependence
+####################################
+
+With same function ``my_pdp_plot.compute_clusters()`` of Section 1.4, it is also possible to cluster heatmaps. 
+
+An heatmap object from the command ``my_pdp_plot.pdp_2D(feat_y, feat_x, instances)`` contains: 
+``num_samples`` X ``num_samples`` X ``len(instances)`` prediction values.
+
+It is possible to cluster all the test instances (using the RMSE metric) and to display an heatmaps for each cluster with the following code:
+
+.. code:: python
+
+    all_inst = my_pdp_plot.pdp_2D("alcohol", "density")
+    list_clust_heats = my_pdp_plot.compute_clusters(all_inst, clust_number = 16)
+    my_pdp_plot.plot_heatmap(list_clust_heats)
+
+.. image:: images/clust_heats_test.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+1.8 2D partial dependence SPLOMs
+################################
 
 We can combine all the possible heatmaps in a single visualization.
 The SPLOM will show the patterns describing all possible pairs of features partial dependence.
@@ -191,8 +213,8 @@ The code to visualize the SPLOM for that same instance 88 is quite simple:
 
 .. code:: python
 
-	sploms_objs = my_pdp_plot.get_data_splom(88)
-	my_pdp_plot.plot_splom(sploms_objs)
+    sploms_objs = my_pdp_plot.get_data_splom(88)
+    my_pdp_plot.plot_splom(sploms_objs)
 
 A stripe of blue/red over a column and row of a feature determines an increase/decrease of prediction when that feature is changed, no matter what other feature varies.
 For example for this particular instance, when changing just two features, an increase in *alcohol* or decrease in *volatile acidity* would generally bring an increase in prediction towards the class *good wine*.
@@ -213,14 +235,16 @@ For example there is an enclaved blue area within the heatmap cell for *pH* and 
 
 .. code:: python
 
-	sploms_objs = my_pdp_plot.get_data_splom()
-	my_pdp_plot.plot_splom(sploms_objs)
+    sploms_objs = my_pdp_plot.get_data_splom()
+    my_pdp_plot.plot_splom(sploms_objs)
 
 .. image:: images/splom_test.png
     :width: 1080px
     :align: center
     :height: 1080px
     :alt: alternate text
+
+
 
 
 ****************************************
@@ -238,7 +262,7 @@ If ``batch_size`` is 0, then the computation of prediction will take place in a 
 
 .. code:: python
 
-	curves = my_pdp_plot.pdp( chosen_feature, batch_size = 1000 )
+    curves = my_pdp_plot.pdp( chosen_feature, batch_size = 1000 )
 
 
 2.2 Using your own matplotlib figure
@@ -248,28 +272,28 @@ If you really like to hand yourself matplotlib and be free to customize the visu
 
 .. code:: python
 
-	curves_list_RF = my_pdp_plot.compute_clusters(curves, chosen_cluster_number)
+    curves_list_RF = my_pdp_plot.compute_clusters(curves, chosen_cluster_number)
 
-	cluster_7 = curves_list_RF[7]
-	cluster_0 = curves_list_RF[0]
-	cluster_9 = curves_list_RF[9]
+    cluster_7 = curves_list_RF[7]
+    cluster_0 = curves_list_RF[0]
+    cluster_9 = curves_list_RF[9]
 
-	fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
 
-	my_pdp_plot.plot(cluster_7,
-	                   color_plot="red", 
-	                   plot_object=ax)
+    my_pdp_plot.plot(cluster_7,
+                       color_plot="red", 
+                       plot_object=ax)
 
-	my_pdp_plot.plot(cluster_0,
-	                   color_plot="blue", 
-	                   plot_object=ax)
+    my_pdp_plot.plot(cluster_0,
+                       color_plot="blue", 
+                       plot_object=ax)
 
-	my_pdp_plot.plot(cluster_9,
-	                   color_plot="green", 
-	                   plot_object=ax)
+    my_pdp_plot.plot(cluster_9,
+                       color_plot="green", 
+                       plot_object=ax)
 
-	plt.show()
-	plt.close("all")
+    plt.show()
+    plt.close("all")
 
 .. image:: images/own_figure.png
     :width: 1600px
@@ -286,17 +310,17 @@ For example let's compare the Random Forest model we had so far with a Support V
 
 .. code:: python
 
-	wine_pdp_plot_SVM = pdp_plot.PartialDependence(df_test,
-	                  model_SVM,
-	                  labels_name,
-	                  labels_focus,
-	                  num_samples,
-	                  scale_SVM,
-	                  shift_SVM)
+    wine_pdp_plot_SVM = pdp_plot.PartialDependence(df_test,
+                      model_SVM,
+                      labels_name,
+                      labels_focus,
+                      num_samples,
+                      scale_SVM,
+                      shift_SVM)
 
-	curves = wine_pdp_plot_SVM.pdp(chosen_feature)
-	curves_list_SVM = wine_pdp_plot_SVM.compute_clusters(curves, chosen_cluster_number)
-	wine_pdp_plot_SVM.plot(curves_list_SVM)
+    curves = wine_pdp_plot_SVM.pdp(chosen_feature)
+    curves_list_SVM = wine_pdp_plot_SVM.compute_clusters(curves, chosen_cluster_number)
+    wine_pdp_plot_SVM.plot(curves_list_SVM)
 
 .. image:: images/SVM.png
     :width: 1600px
@@ -308,30 +332,30 @@ A possible approach could be to check which clusters of the SVM model share the 
 
 .. code:: python
 
-	cluster_7_RF = curves_list_RF[7]
-	set_RF = set(cluster_7_RF[1].get_ixs())
+    cluster_7_RF = curves_list_RF[7]
+    set_RF = set(cluster_7_RF[1].get_ixs())
 
-	for cluster_SVM in curves_list_SVM:
-	    set_SVM = set(cluster_SVM[1].get_ixs())
-	    intrs_size = len(set_RF.intersection(set_SVM))
-	    
-	    if intrs_size!=0:
-	        clusters_SVM_related.append(cluster_SVM)
+    for cluster_SVM in curves_list_SVM:
+        set_SVM = set(cluster_SVM[1].get_ixs())
+        intrs_size = len(set_RF.intersection(set_SVM))
+        
+        if intrs_size!=0:
+            clusters_SVM_related.append(cluster_SVM)
 
-	fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
 
 
-	wine_pdp_plot_RF.plot(cluster_7_RF,
-	                      color_plot="black", 
-	                      plot_object=ax)
+    wine_pdp_plot_RF.plot(cluster_7_RF,
+                          color_plot="black", 
+                          plot_object=ax)
 
-	color_legend = ["r","g","b"]
+    color_legend = ["r","g","b"]
 
-	wine_pdp_plot_SVM.plot(clusters_SVM_related,
-	                       color_plot=color_legend,
-	                       plot_object=ax)
-	plt.show()
-	plt.close("all")
+    wine_pdp_plot_SVM.plot(clusters_SVM_related,
+                           color_plot=color_legend,
+                           plot_object=ax)
+    plt.show()
+    plt.close("all")
 
 The entire code to get also the legend updated with proper labels is present in the Jupyter notebook.
 The cluster 5 from the SVM in green shares 53 % of the instances with the cluster 7 from the RF in black.
@@ -348,7 +372,7 @@ This is just an example of what it is possible to do with this library.
 
 To cluster together the partial dependence plots, we measure the distance among each pair.
 By default this distance is measured with RMSE.
-Another option is `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_  distance, an approximation of Dynamic Time Warping (DTW) distance.
+Another option for 1D partial dependence clustering is `LB Keogh <http://www.cs.ucr.edu/~eamonn/LB_Keogh.htm>`_  distance, an approximation of Dynamic Time Warping (DTW) distance.
 By setting the ``curves.r_param`` parameter of the formula to a value different from ``None``, you are able to compute the clustering with the LB Keogh.
 The method ``get_optimal_keogh_radius()`` gives you a quick way to automatically compute an optimal value for ``curves.r_param``.
 To set the distance back to RMSE just set ``curves.set_keogh_radius(None)`` before recomputing the clustering.
@@ -361,15 +385,15 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 
 .. code:: python
 
-	curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
-	keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+    curves.set_keogh_radius( my_pdp_plot.get_optimal_keogh_radius() )
+    keogh_curves_list = my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
 2.5 An example of the visualization customizations
 ##############################################
 
 .. code:: python
 
-	my_pdp_plot.plot( keogh_curves_list, local_curves = False, plot_full_curves = True )
+    my_pdp_plot.plot( keogh_curves_list, local_curves = False, plot_full_curves = True )
 
 .. image:: images/custom.png
     :width: 1600px
@@ -379,9 +403,9 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 
 .. code:: python
 
-	curves_list_RF = my_pdp_plot.compute_clusters( curves_RF, 5 )
+    curves_list_RF = my_pdp_plot.compute_clusters( curves_RF, 5 )
 
-	my_pdp_plot.plot( curves_list_RF, cell_view = True)
+    my_pdp_plot.plot( curves_list_RF, cell_view = True)
 
 .. image:: images/RF_five_cell_view.png
     :width: 1600px
@@ -391,9 +415,9 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 
 .. code:: python
 
-	curves_list_SVM = my_pdp_plot_SVM.compute_clusters( curves_SVM, 25 )
+    curves_list_SVM = my_pdp_plot_SVM.compute_clusters( curves_SVM, 25 )
 
-	my_pdp_plot_SVM.plot( curves_list_SVM, 
+    my_pdp_plot_SVM.plot( curves_list_SVM, 
                           cell_view = True, 
                           plot_full_curves = True, 
                           local_curves = False, 
@@ -412,12 +436,12 @@ In case you want to highlight the partial dependence of a particular vector ``cu
 
 .. code:: python
 
-	curves, custom_preds = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
+    curves, custom_preds = my_pdp_plot.pdp( chosen_feature, chosen_row = custom_vect )
 
-	my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
+    my_pdp_plot.compute_clusters( curves, chosen_cluster_number )
 
-	my_pdp_plot.plot( curves, local_curves = False,
-	                   chosen_row_preds_to_plot = custom_preds )
+    my_pdp_plot.plot( curves, local_curves = False,
+                       chosen_row_preds_to_plot = custom_preds )
 
 .. image:: images/custom_vect.png
     :width: 1600px

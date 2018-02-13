@@ -346,8 +346,8 @@ class Pdp2DCurves(object):
         if lab_A == lab_B:
             return 1.1
 
-        inst_A_list = real_A.get_ixs()
-        inst_B_list = real_B.get_ixs()
+        inst_A_list = real_A._index_ixs
+        inst_B_list = real_B._index_ixs
 
         distance_list = []
 
@@ -368,6 +368,8 @@ class Pdp2DCurves(object):
                 c._dm = self._dm[labels_cluster == lbl, :][:, labels_cluster == lbl]
             c._ixs = self._ixs[labels_cluster == lbl]
             c._origs = self._origs[labels_cluster == lbl]
+            c._index_ixs = np.array(range(len(self._ixs)))[labels_cluster == lbl]
+
             c.heat_map = c.compute_heatmap()
 
             return c
@@ -455,7 +457,7 @@ class PartialDependence(object):
         self.mdl = model
         self.cls_arr = class_array
         self.cls_fcs = class_focus
-        self.n_smpl = num_samples
+        self.n_smpl = int(np.floor(num_samples/2)*2)
         self.scl = scale
         self.shft = shift
         
@@ -1723,7 +1725,7 @@ class PartialDependence(object):
         num_feat = self.num_feat
         list_local_sampling = self.list_local_sampling
 
-        def single_heatmap (curves_input, for_splom = for_splom, plot_obj = plot_object, clustering = False):
+        def single_heatmap (curves_input,  plot_obj, for_splom = for_splom, clustering = False):
 
             if type(curves_input) is tuple:
                 label_cluster = curves_input[0]
@@ -1737,6 +1739,8 @@ class PartialDependence(object):
 
             single = False
             mult = False
+            font_title = font_size_par
+
 
             if type(instances) is int:
                 single = True
@@ -1769,22 +1773,24 @@ class PartialDependence(object):
             #se mult
                 color_parameter = 0.5
 
-            if plot_obj is not None:
 
-                axis = plot_obj
+            axis = plot_obj
 
-            else:
-            
-                fig, axis = plt.subplots(figsize=(10.8, 10.8), dpi=100)
             
             if not for_splom and not clustering:
-                axis.set_title(feat_y+" vs "+feat_x, fontsize=font_size_par+4)
+                axis.set_title(feat_y+" vs "+feat_x, fontsize=font_title+4)
             elif clustering:
-                axis.set_title("Cluster "+str(label_cluster)+ " - size: "+size, fontsize=font_size_par)
+                string_clust = "Cluster "
+                if clust_number > 12:
+                    string_clust ="#"
+                    font_title -=2
+                    if clust_number > 30:
+                        font_title -=2
+                axis.set_title(string_clust+str(label_cluster)+ " - size: "+size, fontsize=font_title)
 
 
-            axis.set_xlabel(feat_x,fontsize= font_size_par)
-            axis.set_ylabel(feat_y,fontsize= font_size_par)
+            axis.set_xlabel(feat_x,fontsize= font_title)
+            axis.set_ylabel(feat_y,fontsize= font_title)
             
 
             if mult:
@@ -1821,14 +1827,41 @@ class PartialDependence(object):
 
             def ticksCreator(sample,num_ticks):
                 
-                skip_pase = int(np.ceil(num_samples/num_ticks))
-                sample = list(sample)[::skip_pase]
-                minVal = sample[0]
-                maxVal = sample[-1]
-                return sample, minVal, maxVal
+                #skip_pase = int(np.ceil(num_samples/num_ticks))
+                #sample = list(sample)[::skip_pase]
+                sample = list(sample)
+
+                base_value = sample[int(num_samples/2)]
+                min_val = sample[0]
+                max_val = sample[-1]
+
+                samplesLeft = list( np.linspace( min_val, 
+                                                 base_value, 
+                                                 int(num_ticks / 2) + 1 ) )
+
+                samplesRight = list( np.linspace( base_value, 
+                                                  max_val, 
+                                                  int(num_ticks / 2) + 1) )
+
+                samples = samplesLeft + samplesRight
+                divisor = int(num_ticks/2+1)
+
+                sample = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+
+
+
+                return sample, min_val, max_val 
 
             # num_ticks has to be an even integer number
-            num_ticks = 20
+            if not clustering:
+                num_ticks = min(num_samples,20)
+            else:
+                num_ticks = min(num_samples,20)
+                if clust_number > 2:
+                    num_ticks = min(num_samples,10)
+                    if clust_number > 12:
+                        num_ticks = min(num_samples,4)
+
 
             ticksA, minA, maxA = ticksCreator(sampleA,num_ticks)
             ticksB, minB, maxB = ticksCreator(sampleB,num_ticks)
@@ -1852,6 +1885,10 @@ class PartialDependence(object):
             axis.set_yticks(ticksA, minor=False)
             axis.set_xticks(ticksB, minor=False)
 
+            if clustering:
+                axis.set_yticklabels([str(np.around(t,decimals=3)) for t in ticksA], minor=False)
+                axis.set_xticklabels([str(np.around(t,decimals=3)) for t in ticksB], minor=False)
+
 
             axis.set_xlim(minB, maxB)
             axis.set_ylim(maxA, minA)
@@ -1866,7 +1903,7 @@ class PartialDependence(object):
                 size_marker = size_marker / num_feat
                 edge_marker = edge_marker / num_feat
 
-            else:
+            elif not clustering:
 
                 axis.plot(B_center, A_center,
                           marker=marker_style,
@@ -1876,31 +1913,44 @@ class PartialDependence(object):
 
             if mult:
 
-                if len(instances) > 100:
+                if clustering:
+
                     marker_style_small = "."
-                    size_marker_small = 40
                     edge_marker_small = 0
-                    opacity_small = 0.5
-
-                    if for_splom:
-                        size_marker_small = size_marker_small / max(1,np.ceil(num_feat/3))
-                        opacity_small = 0.05
-
-                else:
-                    marker_style_small = "+"
-                    size_marker_small = 50
-                    edge_marker_small = 2
-
+                    size_marker_small = 40 / max(1,np.ceil(max(grid_heigth,grid_width)/3))
                     if len(instances) > 10:
                         opacity_small = 0.25
                     else:
                         opacity_small = 1
 
+                else:
 
-                    if for_splom:
+                    if len(instances) > 100:
                         marker_style_small = "."
+                        size_marker_small = 40
                         edge_marker_small = 0
-                        size_marker_small = 40 / max(1,np.ceil(num_feat/3))
+                        opacity_small = 0.5
+
+                        if for_splom:
+                            size_marker_small = size_marker_small / max(1,np.ceil(num_feat/3))
+                            opacity_small = 0.05
+
+
+                    else:
+                        marker_style_small = "+"
+                        size_marker_small = 50
+                        edge_marker_small = 2
+
+                        if len(instances) > 10:
+                            opacity_small = 0.25
+                        else:
+                            opacity_small = 1
+
+
+                        if for_splom:
+                            marker_style_small = "."
+                            edge_marker_small = 0
+                            size_marker_small = 40 / max(1,np.ceil(num_feat/3))
 
 
                 axis.scatter(B_points, A_points, 
@@ -1911,6 +1961,7 @@ class PartialDependence(object):
                              alpha = opacity_small)
 
             middle_tick = int(num_ticks/2)
+
             axis.get_xticklabels()[middle_tick].set_color('red') 
             axis.get_yticklabels()[middle_tick].set_color('red')
             
@@ -1946,17 +1997,22 @@ class PartialDependence(object):
 
                 fig, ax = plt.subplots( figsize=(10.8,10.8), nrows=grid_heigth, ncols=grid_width, dpi=100)
 
+
                 for i in range(clust_number):
 
                     if i /  grid_heigth < col_plot_init + 1:
 
                         col_plot = col_plot_init 
                         row_plot = row_plot_init + 1
+
                     else:
                         col_plot = col_plot_init + 1
                         row_plot = 0
 
-                    axes_plot = ax[row_plot,col_plot]
+                    if grid_width == 1 :
+                        axes_plot = ax[row_plot]
+                    else:
+                        axes_plot = ax[row_plot,col_plot]
 
                     col_plot_init = col_plot
                     row_plot_init = row_plot
@@ -1964,9 +2020,27 @@ class PartialDependence(object):
                     font_size_par = 15
 
                     single_heatmap (curves_objs[i], plot_obj = axes_plot, clustering = True)
+                    if clust_number > 16:
+                        axes_plot.axis("off")
+
+                while True:
+                    try:
+                        row_plot_init +=1
+                        ax[row_plot_init,col_plot_init].axis("off")
+                    except IndexError:
+                        break
+
+
+
+
         else:
+            if plot_object is None: 
+                fig, ax = plt.subplots( figsize=(10.8,10.8), dpi=100)
+            else:
+                ax = plot_object
+
             font_size_par = 20
-            single_heatmap (curves_objs)
+            single_heatmap (curves_objs, plot_obj = ax)
 
             plt.tight_layout()
 
@@ -1977,11 +2051,31 @@ class PartialDependence(object):
 
                 color_scale = mpl.colors.Normalize(vmin = -np.abs(color_parameter), vmax = np.abs(color_parameter))
 
-                cax = fig.add_axes([0.85, 0.05, 0.05, 0.9])
+                cax = fig.add_axes([0.9, 0.1, 0.05, 0.8])
                 cb1 = mpl.colorbar.ColorbarBase(cax, cmap = "RdYlBu", norm = color_scale)
 
+                w_s = 0.2
+                h_s = 0.55
+                bot = 0.1
+                top = 0.9
+                lef = 0.1
+                rig = 0.85
 
-                fig.subplots_adjust(wspace=0.15, hspace = 0.6, top=0.95, bottom=0.05, left=0.05, right=0.8)
+                if clust_number > 6:
+                    w_s += 0.05
+                    if clust_number > 9:
+                        h_s += 0.1
+                        if clust_number > 12:
+                            w_s += 0.1
+
+
+
+                fig.subplots_adjust( wspace = w_s, 
+                                     hspace = h_s, 
+                                     top = top, 
+                                     bottom = bot, 
+                                     left = lef, 
+                                     right = rig)
                 
 
 
