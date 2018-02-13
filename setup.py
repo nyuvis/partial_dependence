@@ -18,7 +18,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='partial_dependence',
-    version='0.0.3',
+    version='0.0.4',
     description='PartialDependence is a library for visualizing input-output relationships of machine learning models.',
     long_description=long_description,
     url='https://github.com/nyuvis/partial_dependence',
