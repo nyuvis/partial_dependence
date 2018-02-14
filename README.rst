@@ -328,44 +328,6 @@ For example let's compare the Random Forest model we had so far with a Support V
     :height: 900px
     :alt: alternate text
 
-A possible approach could be to check which clusters of the SVM model share the same instances with a selected cluster of the RF model.
-
-.. code:: python
-
-    cluster_7_RF = curves_list_RF[7]
-    set_RF = set(cluster_7_RF[1].get_ixs())
-
-    for cluster_SVM in curves_list_SVM:
-        set_SVM = set(cluster_SVM[1].get_ixs())
-        intrs_size = len(set_RF.intersection(set_SVM))
-        
-        if intrs_size!=0:
-            clusters_SVM_related.append(cluster_SVM)
-
-    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
-
-
-    wine_pdp_plot_RF.plot(cluster_7_RF,
-                          color_plot="black", 
-                          plot_object=ax)
-
-    color_legend = ["r","g","b"]
-
-    wine_pdp_plot_SVM.plot(clusters_SVM_related,
-                           color_plot=color_legend,
-                           plot_object=ax)
-    plt.show()
-    plt.close("all")
-
-The entire code to get also the legend updated with proper labels is present in the Jupyter notebook.
-The cluster 5 from the SVM in green shares 53 % of the instances with the cluster 7 from the RF in black.
-This is just an example of what it is possible to do with this library.
-
-.. image:: images/intersection.png
-    :width: 1600px
-    :align: center
-    :height: 900px
-    :alt: alternate text
 
 2.4 Clustering with DTW distance
 ################################
@@ -405,7 +367,7 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 
     curves_list_RF = my_pdp_plot.compute_clusters( curves_RF, 5 )
 
-    my_pdp_plot.plot( curves_list_RF, cell_view = True)
+    my_pdp_plot.plot( curves_list_RF, cell_view = True )
 
 .. image:: images/RF_five_cell_view.png
     :width: 1600px
