@@ -24,6 +24,8 @@ import sys
 from matplotlib.legend import Legend
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.gridspec as gridspec
+
 
 
 
@@ -136,7 +138,7 @@ class PdpCurves(object):
     def get_preds(self):
         return self._preds
 
-    def get_dm(self):
+    def get_dm(self, never_splom = False):
         if self._dm is None:
             self._dm = self._compute_dm()
         return self._dm
@@ -217,17 +219,6 @@ class Pdp2DCurves(object):
         self.heat_map = None
 
 
-    def copy(self):
-
-        return self.__copy__()
-
-    def __copy__(self):
-
-        res = type(self)(self._raw, self._origs, self._ixs, self.A, self.B)
-        res.__dict__.update(self.__dict__)
-
-        return res
-
 
     def get_sample_A(self):
         return self.sample_A
@@ -283,35 +274,52 @@ class Pdp2DCurves(object):
 
         return self.sample_A, self.sample_B
 
+    def copy(self):
+
+        return self.__copy__()
+
+    def __copy__(self):
+
+        res = type(self)(self._raw, self._origs, self._ixs, self.A, self.B)
+        res.__dict__.update(self.__dict__)
+
+        return res
+
     def swap_features(self):
 
         swapped_copy = self.copy()
 
-        self.heat_map = swapped_copy.get_data().transpose()
+        swapped_copy.heat_map = self.get_data().transpose()
 
         raws = []
-        for r in swapped_copy._raw:
+        for r in self._raw:
            raws.append(r.transpose()) 
         raws = np.array(raws)
 
-        self._raw = raws
+        swapped_copy._raw = raws
 
-        self.A = swapped_copy.B
-        self.B = swapped_copy.A
+        swapped_copy.A = self.B
+        swapped_copy.B = self.A
 
-        self.sample_A = swapped_copy.sample_B
-        self.sample_B = swapped_copy.sample_A
+        swapped_copy.sample_A = self.sample_B
+        swapped_copy.sample_B = self.sample_A
+        return swapped_copy
 
-    def get_dm(self):
+    def get_dm(self, is_splom = False):
         if self._dm is None:
-            self._dm = self._compute_dm()
+            self._dm = self._compute_dm(is_splom)
         return self._dm
 
-    def _compute_dm(self):
+    def set_dm(self,matrix):
+        self._dm = matrix
+
+    def _compute_dm(self, splom_flag = False):
         preds = self._raw
         lenTest = len(self._ixs)
 
-        def rmse(curve1, curve2):
+        def rmse(curve1, curve2, do_you_splom = False):
+            if do_you_splom:
+                return ((curve1 - curve2) ** 2).sum()
             return np.sqrt(((curve1 - curve2) ** 2).mean())
 
 
@@ -327,7 +335,7 @@ class Pdp2DCurves(object):
             i = pair[0]
             j = pair[1]
 
-            distance = rmse(preds[i].reshape((-1,)), preds[j].reshape((-1,)))
+            distance = rmse(preds[i].reshape((-1,)), preds[j].reshape((-1,)),splom_flag)
 
             distance_matrix[i, j] = distance
             distance_matrix[j, i] = distance
@@ -583,12 +591,14 @@ class PartialDependence(object):
     def pdp(self, fix, chosen_row=None,batch_size=0):
 
         """
-        Produces for each instance the test-set num_samples different versions.
-        The versions vary just for the feature fix, which changes within the sample df_sample[fix].
-        All the other features values remain the same.
+        By choosing a feature and changing it in the sample range, 
+        for each row in the test-set we can create num_samples different versions of the original instance.
+        Then we are able to compute prediction values for each of the different vectors.
+        pdp() initialize and returns a python object from the class PdpCurves containing such predictions values.
 
         Parameters
         ----------
+
         fix : string
             (REQUIRED) The name of feature as reported in one of the df_test columns.
        
@@ -606,6 +616,7 @@ class PartialDependence(object):
 
         Returns
         -------
+
         curves_returned: python object
             (ALWAYS) An itialized object from the class PdpCurves.
             It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
@@ -617,7 +628,6 @@ class PartialDependence(object):
 
         """
             
-        #t = time.time()
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
         num_feat = self.num_feat
@@ -766,8 +776,9 @@ class PartialDependence(object):
     def get_optimal_keogh_radius(self):
 
             """
-            Compute the optimal value for the parameter needed to compute the LB Keogh distance.
+            computes the optimal value for the parameter needed to compute the LB Keogh distance.
             It is computed given the sample values, the standard deviation, max and min.
+
             """
 
             the_feature = self.the_feature
@@ -783,7 +794,6 @@ class PartialDependence(object):
             rWarpedUsed = sugg_r
             if rWarpedUsed == 0:
                 rWarpedUsed = 1
-            self.rWarpedUsed = rWarpedUsed
 
             return rWarpedUsed
 
@@ -800,72 +810,134 @@ class PartialDependence(object):
         Parameters
         ----------
         curves : python object
-            (REQUIRED) Returned by previous function pred_comp_all().
+            (REQUIRED) Returned by previous function pdp() or pdp_2D() or get_data_splom().
 
         clust_number : integer value
             (OPTIONAL) [default = 5] The number of desired clusters.
 
+        Returns
+        -------
+
+        the_list_sorted : list of size clust_number with tuples: ( label cluster (float), python object )
+            (ALWAYS) Each element is an object from the class PdpCurves() or Pdp2DCurves() representing a different cluster.
+            This list is sorted using the clustering distance matrix taking the biggest cluster first, 
+            then the closest cluster by average distance next and so on.
+
         """
+        num_feat = self.num_feat
+        num_samples = self.n_smpl
 
-        distance_matrix = curves.get_dm()
+        from_splom = False
+        if type(curves) is dict:
+            from_splom = True
 
 
+        if not from_splom:
 
-        #print()
-        #print("elapsed: ",np.around( (time.time() - start_time) / 60.0, decimals = 2),"m")
-        #clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='complete')
-        clust = AgglomerativeClustering(affinity='precomputed', n_clusters=clust_number, linkage='average')
-        #clust = AgglomerativeClustering(affinity='euclidean', n_clusters=clust_number, linkage='ward')
+            distance_matrix = curves.get_dm(from_splom)
+
+        else:
+
+            size_matrix = len(curves[(0,1)].get_ixs())
+            distance_matrix = np.zeros((size_matrix,size_matrix))
+
+            for ij in curves:
+                curves_from_grid = curves[ij]
+                distance_matrix += curves_from_grid.get_dm(from_splom)
+
+            num_squares_summed = (num_samples+1)**2*(num_feat**2-num_feat)/2
+            distance_matrix = np.sqrt(distance_matrix/num_squares_summed)
+
+
+        clust = AgglomerativeClustering(affinity = 'precomputed', n_clusters = clust_number, linkage = 'average')
+
         clust.fit(distance_matrix)
-        #clust.fit(preds) #just if affinity='euclidean' and linkage='ward'
-        self.dist_matrix = distance_matrix
+
         labels_array = clust.labels_
-        goal = curves.split(labels_array)
-        the_list = goal[0]
-        the_matrix_for_sorting = goal[1]
 
-        size = 0
-        for cl in the_list:
-            size_new = len(cl[1].get_ixs())
-            
-            if size_new > size:
-                size = size_new
-                label_biggest = cl[0]
+        def split_and_sort (curves_obj):
 
-        cluster_labels_still = list(range(len(the_list)))
-        corder = [ label_biggest ]
-        cluster_labels_still.remove(label_biggest)
+            goal = curves_obj.split(labels_array)
+            the_list = goal[0]
+            the_matrix_for_sorting = goal[1]
 
-        while len(corder)<len(the_list):
+            size = 0
+            for cl in the_list:
+                size_new = len(cl[1].get_ixs())
+                
+                if size_new > size:
+                    size = size_new
+                    label_biggest = cl[0]
 
-            mins = {}
+            cluster_labels_still = list(range(len(the_list)))
+            corder = [ label_biggest ]
+            cluster_labels_still.remove(label_biggest)
+
+            while len(corder)<len(the_list):
+
+                mins = {}
+                for c in corder:
+                    full_distances = list(the_matrix_for_sorting[c,:])
+                    distances = list(the_matrix_for_sorting[c,cluster_labels_still])
+
+                    the_min = np.min(distances)
+                    the_index = full_distances.index(min(distances))
+                    mins[the_index] = the_min
+
+                new_cord = min(mins, key=mins.get)
+
+                corder.append(new_cord)
+                cluster_labels_still.remove(new_cord)
+
+
+            if len(np.unique(corder)) != len(the_list):
+                print("Fatal Error.")
+                
+            the_list_sorted = []
             for c in corder:
-                full_distances = list(the_matrix_for_sorting[c,:])
-                distances = list(the_matrix_for_sorting[c,cluster_labels_still])
+                the_list_sorted.append(the_list[c])
 
-                the_min = np.min(distances)
-                the_index = full_distances.index(min(distances))
-                mins[the_index] = the_min
+            return the_list_sorted
 
-            new_cord = min(mins, key=mins.get)
+        if not from_splom:
+            return split_and_sort (curves)
 
-            corder.append(new_cord)
-            cluster_labels_still.remove(new_cord)
+        else:
+            heats_list = []
+            labels_list = []
+            for i in range(clust_number):
+                heats_list.append({})
+                labels_list.append(None)
+
+            for ij in curves:
+                curves[ij].set_dm(distance_matrix)
+                list_heatmaps = split_and_sort(curves[ij])
+
+                for i in range(clust_number):
+                    label_cluster = list_heatmaps[i][0]
+                    heat_obj = list_heatmaps[i][1]
+  
+                    if labels_list[i] is None:
+                       labels_list[i] = label_cluster
+
+                    else:
+                        if labels_list[i] != label_cluster:
+                            print ("mismatching clusters",labels_list[i],"vs",label_cluster)
+                            return
+
+                    heats_list[i][ij] = heat_obj
+
+            return [ (labels_list[i], heats_list[i]) for i in range(clust_number) ]
 
 
-        if len(np.unique(corder))!=len(the_list):
-            print("Fatal Error.")
-            
-        the_list_sorted = []
-        for c in corder:
-            the_list_sorted.append(the_list[c])
-
-        return the_list_sorted
-        #curves.write_labels(labels_array)
 
 
 
-    def back_to_the_original(self, data_this, fix):
+
+
+    def _back_to_the_original(self, data_this, fix):
+
+        # private function to be able to plot the data values not in normalized form
 
         dictLabtoIndex = self.dictLabtoIndex
         de_norm = self.de_norm_bool
@@ -894,7 +966,6 @@ class PartialDependence(object):
 
 
         """
-        Porduces the visualization printing it in a .png file in the current path.
         The visualization will display broad curves with color linked to different clusters.
         The orginal instances are displayed with coordinates (orginal feature value, original prediction) either as
         local curves or dots depending on the local_curves argument value.
@@ -903,7 +974,12 @@ class PartialDependence(object):
         ----------
         
         curves : python object
-            (REQUIRED) Returned by previous function pdp().
+            (REQUIRED) A python object from the class PdpCurves(). ( Returned by previous function pdp() )
+            Otherwise a list of such python objects in tuples. ( Returned by previous function compute_clusters() )
+
+        color_plot : string or list of strings
+            (OPTIONAL) [default = None] The color for each cluster of instances. 
+            If there is no clustering or just a single cluster provide just a string with the desire color.
 
         thresh: float value
             (OPTIONAL) [default = 0.5]  The threshold is displayed as a red dashed line parallel to the x-axis.
@@ -1005,7 +1081,7 @@ class PartialDependence(object):
             #cmap = plt.get_cmap("RdYlBu")
             # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
 
-            original_data_sample = self.back_to_the_original(list(df_sample[fix]), fix)
+            original_data_sample = self._back_to_the_original(list(df_sample[fix]), fix)
 
 
             #t = time.time()
@@ -1041,7 +1117,7 @@ class PartialDependence(object):
 
             else:
                 x_point = changing_rows[indices_from_test, dictLabtoIndex[fix]]
-                x_point = self.back_to_the_original(x_point, fix)
+                x_point = self._back_to_the_original(x_point, fix)
                 y_point = original_preds[indices_from_test]
                 ax.scatter(x_point, y_point, c=ticks_color, s=dot_size)
 
@@ -1054,7 +1130,7 @@ class PartialDependence(object):
             if chosen_row_preds is not None:
                 ax.plot(original_data_sample,chosen_row_preds,color="red",lw=2)
 
-            the_mean_value = self.back_to_the_original(df_features["mean"][fix], fix)
+            the_mean_value = self._back_to_the_original(df_features["mean"][fix], fix)
             if not cell_view:
                 ax.axvline(x=the_mean_value, color="green", linestyle='--')
                 ax.axhline(y=thresh, color="red", linestyle='--')
@@ -1083,7 +1159,15 @@ class PartialDependence(object):
 
             else:
                 if clust_number > 15:
-                    ax.text(0.5,0.5,"#"+str(label_title_cluster).zfill(2),fontsize=font_size_par+10,transform=ax.transAxes, ha = "center",va = "center",alpha = 0.25)
+
+                    ax.text(0.5,
+                            0.5,
+                            "#"+str(label_title_cluster).zfill(2),
+                            fontsize=font_size_par+10,
+                            transform=ax.transAxes, 
+                            ha = "center",
+                            va = "center",
+                            alpha = 0.25)
 
 
         
@@ -1219,7 +1303,7 @@ class PartialDependence(object):
 
             allSamplesOriginal = {}
             for key in allSamples:
-                allSamplesOriginal[key] = self.back_to_the_original(allSamples[key], key.split("-o-")[0])
+                allSamplesOriginal[key] = self._back_to_the_original(allSamples[key], key.split("-o-")[0])
 
 
         texts1 = []
@@ -1453,7 +1537,9 @@ class PartialDependence(object):
                         no_axis = True
                         ax_object.axis("off")
 
-            title_all = 'pdp for class: '+class_array[data_set_pred_index].replace("\n"," ")
+            class_focus = self.cls_fcs
+
+            title_all = 'pdp for class: '+class_focus.replace("\n"," ")
             title_all = title_all + " - feature: "+fix
 
             if no_axis:
@@ -1508,20 +1594,74 @@ class PartialDependence(object):
             plt.close("all")
 
 
-    def local_sampling_mult (self, fix, base_value, based_on_mean=False, min_max = None):
+    def _local_sampling_mult (self, fix, base_value, based_on_mean = False, min_max = None):
 
-            num_samples = self.n_smpl
+        
+        '''
+        This private function is needed to perform sampling based on an arbitrary set of instances.
+
+        Parameters
+        ----------
+        
+        fix : string
+            (REQUIRED) The feature name.
+
+        base_value : float
+            (REQUIRED) The value which will be placed in the center of the sampling,
+            needed to define the center of the heatmap.
+
+        based_on_mean : boolean
+            (OPTIONAL) [default = False] If True the sampling is around the mean value of the set of istances for the chosen feature.
+            The distance around such value is fixed and depends on the standard deviation.
+            If False the sampling goes to min to max of the value of the set of istances for the chosen feature.
+            Therefore base_value should be set at (max-min)/2 + min
+
+        min_max: tuple of two floats
+            (NOT REQUESTED  if based_on_mean) If we are sampling around the mean this argument is ignored.
+            (REQUESTED      if not based_on_mean) If instead we are sampling from min to max this parameter is needed.
+
+        Returns
+        -------
+
+        final_samples: list of floats of size num_samples
+            the samples of the feature to be used to compute the pdp.
 
 
-            if based_on_mean:
+
+       '''
+
+        num_samples = self.n_smpl
 
 
-                samplesLeft = list( np.linspace( base_value - 1, 
+        if based_on_mean:
+
+
+            samplesLeft = list( np.linspace( base_value - 1, 
+                                             base_value, 
+                                             int(num_samples / 2) + 1 ) )
+
+            samplesRight = list( np.linspace( base_value, 
+                                              base_value + 1, 
+                                              int(num_samples / 2) + 1) )
+
+            samples = samplesLeft + samplesRight
+            
+            divisor = int(num_samples/2+1)
+            final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
+
+        else:
+
+            if min_max is not None:
+
+                min_val = min_max[0]
+                max_val = min_max[1]
+
+                samplesLeft = list( np.linspace( min_val, 
                                                  base_value, 
                                                  int(num_samples / 2) + 1 ) )
 
                 samplesRight = list( np.linspace( base_value, 
-                                                  base_value + 1, 
+                                                  max_val, 
                                                   int(num_samples / 2) + 1) )
 
                 samples = samplesLeft + samplesRight
@@ -1530,32 +1670,52 @@ class PartialDependence(object):
                 final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
 
             else:
+                print("Error: max and min tuple not provided")
 
-                if min_max is not None:
-
-                    min_val = min_max[0]
-                    max_val = min_max[1]
-
-                    samplesLeft = list( np.linspace( min_val, 
-                                                     base_value, 
-                                                     int(num_samples / 2) + 1 ) )
-
-                    samplesRight = list( np.linspace( base_value, 
-                                                      max_val, 
-                                                      int(num_samples / 2) + 1) )
-
-                    samples = samplesLeft + samplesRight
-                    
-                    divisor = int(num_samples/2+1)
-                    final_samples = samples[:divisor-1]+[base_value]+samples[divisor+1:]
-
-                else:
-                    print("Error: max and min tuple not provided")
-
-            return final_samples
+        return final_samples
 
 
-    def pdp_2D(self,A,B,instances = None, sample_data = None, zoom_on_mean = False):
+    def pdp_2D(self, A, B, instances = None, sample_data = None, zoom_on_mean = False):
+
+        """
+        By choosing two features and changing them in two sample ranges, 
+        for each provided instance we can create num_samples X num_samples different versions of the original instance.
+        Then we are able to compute prediction values for each of the different vectors.
+        pdp_2D() initialize and returns a python object from the class Pdp2DCurves() containing such predictions values. 
+
+        Parameters
+        ----------
+
+        A : string
+            (REQUIRED) The name of a feature as reported in one of the df_test columns.
+
+        B : string
+            (REQUIRED) The name of another feature as reported in one of the df_test columns.
+       
+        instances : list of integers OR single integer value
+            (OPTIONAL) [default = None] If provided, it needs to contain the indexes of the test-set chosen instances.
+            If None all indexes in test set are used. (range(lenTest))
+
+        sample_data: tuple (list for sample A, list for sample B)
+            (OPTIONAL) [default = None] The sample values for feature A and feature B can be provided as arguments here.
+            If not provided they will be automatically computed with the private funct. _local_sampling_mult() depending on zoom_on_mean.
+
+        zoom_on_mean: boolean
+            (OPTIONAL) [default = False] If sample_data is not None, then this argument is ignored.
+            Otherwise:   if True sampling is around the value (mean value feature A, mean value feature B) of the set of instances.
+                         if False sampling goes from min to max of the two feature values, 
+                         therefore all outliers will be part of the sample ranges.
+
+        Returns
+        -------
+
+        heatmap_curves: python object
+            (ALWAYS) An itialized object from the class Pdp2DCurves.
+            It contains all the predictions obtained from the different versions of the instances,
+            along with other useful information to keep store for later steps.
+
+
+        """
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -1650,8 +1810,8 @@ class PartialDependence(object):
                     A_center = np.mean(rows[instances,dictLabtoIndex[A]])
                     B_center = np.mean(rows[instances,dictLabtoIndex[B]])
 
-                    sampleA = self.local_sampling_mult(A, A_center, based_on_mean = True)
-                    sampleB = self.local_sampling_mult(B, B_center, based_on_mean = True)
+                    sampleA = self._local_sampling_mult(A, A_center, based_on_mean = True)
+                    sampleB = self._local_sampling_mult(B, B_center, based_on_mean = True)
 
                 else:
 
@@ -1666,8 +1826,8 @@ class PartialDependence(object):
                     A_center =  min_value_A + (tuple_bounds_A[1] - tuple_bounds_A[0]) / 2
                     B_center =  min_value_B + (tuple_bounds_B[1] - tuple_bounds_B[0]) / 2
 
-                    sampleA = self.local_sampling_mult(A, A_center, min_max = tuple_bounds_A)
-                    sampleB = self.local_sampling_mult(B, B_center, min_max = tuple_bounds_B)
+                    sampleA = self._local_sampling_mult(A, A_center, min_max = tuple_bounds_A)
+                    sampleB = self._local_sampling_mult(B, B_center, min_max = tuple_bounds_B)
 
             else:
 
@@ -1717,7 +1877,32 @@ class PartialDependence(object):
         return heatmap_curves
 
 
-    def plot_heatmap( self, curves_objs, path = None, for_splom = False, plot_object = None):        
+    def plot_heatmap( self, curves_objs, path = None, for_splom = False, plot_object = None): 
+
+        '''
+        This function is able to plot heatmaps from python objects of the class Pdp2DCurves().
+
+        Parameters
+        ----------
+
+        curves_objs : python object
+            (REQUIRED) A python object from the class Pdp2DCurves(). ( Returned by previous function pdp_2D() )
+           Otherwise a list of such python objects in tuples. ( Returned by previous function compute_clusters() )
+           In the latter case the visualization will have an heatmap for each cluster in the list.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically generated.
+
+        for_splom: boolean
+            (OPTIONAL) [default = False] This function is later used to generate the cell heatmaps in a SPLOM visualization.
+            This flag is passed True when such call is needed. In all other cases this flag is False.
+        
+        plot_object: matplotlib axes object
+            (OPTIONAL) [default = None] In case the user wants to pass along his own matplotlib figure to update.
+            This garantees all the possible customization.
+
+        '''       
 
         rows = self.changing_rows
         dictLabtoIndex = self.dictLabtoIndex
@@ -1777,16 +1962,14 @@ class PartialDependence(object):
             axis = plot_obj
 
             
-            if not for_splom and not clustering:
-                axis.set_title(feat_y+" vs "+feat_x, fontsize=font_title+4)
-            elif clustering:
+            if clustering:
                 string_clust = "Cluster "
                 if clust_number > 12:
                     string_clust ="#"
                     font_title -=2
                     if clust_number > 30:
                         font_title -=2
-                axis.set_title(string_clust+str(label_cluster)+ " - size: "+size, fontsize=font_title)
+                axis.set_title(string_clust+str(label_cluster).zfill(2)+ " - size: "+size, fontsize=font_title)
 
 
             axis.set_xlabel(feat_x,fontsize= font_title)
@@ -1795,8 +1978,8 @@ class PartialDependence(object):
 
             if mult:
             
-                A_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_y]], feat_y)
-                B_points = self.back_to_the_original(rows[instances,dictLabtoIndex[feat_x]], feat_x)
+                A_points = self._back_to_the_original(rows[instances,dictLabtoIndex[feat_y]], feat_y)
+                B_points = self._back_to_the_original(rows[instances,dictLabtoIndex[feat_x]], feat_x)
 
 
             color_scale = mpl.colors.Normalize(vmin=-np.abs(color_parameter),vmax=np.abs(color_parameter))
@@ -1816,11 +1999,11 @@ class PartialDependence(object):
 
 
 
-            sampleA = self.back_to_the_original(list(sampleA),feat_y)
-            sampleB = self.back_to_the_original(list(sampleB),feat_x)
+            sampleA = self._back_to_the_original(list(sampleA),feat_y)
+            sampleB = self._back_to_the_original(list(sampleB),feat_x)
 
-            A_center = self.back_to_the_original(A_center,feat_y)
-            B_center = self.back_to_the_original(B_center,feat_x)
+            A_center = self._back_to_the_original(A_center,feat_y)
+            B_center = self._back_to_the_original(B_center,feat_x)
 
 
 
@@ -2042,7 +2225,13 @@ class PartialDependence(object):
             font_size_par = 20
             single_heatmap (curves_objs, plot_obj = ax)
 
-            plt.tight_layout()
+            if not for_splom:
+
+                fig.subplots_adjust( top = 0.95, 
+                                     bottom = 0.05, 
+                                     left = 0.05, 
+                                     right = 0.95 )
+
 
         if plot_object is None:
 
@@ -2076,8 +2265,11 @@ class PartialDependence(object):
                                      bottom = bot, 
                                      left = lef, 
                                      right = rig)
-                
 
+            if not for_splom:
+                class_focus = self.cls_fcs
+                title_all = '2d pdp for class: '+class_focus.replace("\n"," ")
+                fig.suptitle(title_all, fontsize=font_size_par)
 
             if path is not None:
                 if len(path) == 0:
@@ -2093,6 +2285,29 @@ class PartialDependence(object):
 
 
     def get_data_splom(self, instances_input = None, zoom_on_mean = False):
+
+        '''
+        Creates the data needed for a SPLOM visualization starting from a list of indexes relative to the desired instances to visualize:
+
+        Parameters
+        ----------
+
+        instances_input : list of integers OR single integer value
+            (OPTIONAL) [default = None] If provided, it needs to contain the indexes of the test-set chosen instances.
+            If None all indexes in test set are used. (range(lenTest))
+
+        zoom_on_mean: boolean
+            (OPTIONAL) [default = False] If True sampling of each feature is around its mean value from the set instances_input.
+                         if False sampling goes from min to max of each feature, 
+                         therefore all outliers will be part of the sample ranges.
+
+        Returns
+        -------
+
+        cell_object_dict: python dictionary
+            (ALWAYS) grid position heatmap (key) : python object from class Pdp2DCurves() for heatmap (value)
+
+        '''
 
         num_feat = self.num_feat
 
@@ -2148,7 +2363,7 @@ class PartialDependence(object):
 
                     center = np.mean(rows[instances_input,dictLabtoIndex[feat]])
 
-                    sample = self.local_sampling_mult(feat, center, based_on_mean = True)
+                    sample = self._local_sampling_mult(feat, center, based_on_mean = True)
 
                 else:
 
@@ -2158,7 +2373,7 @@ class PartialDependence(object):
 
                     center =  min_value + (tuple_bounds[1] - tuple_bounds[0]) / 2
 
-                    sample = self.local_sampling_mult(feat, center, min_max = tuple_bounds)
+                    sample = self._local_sampling_mult(feat, center, min_max = tuple_bounds)
 
             else:
 
@@ -2195,6 +2410,23 @@ class PartialDependence(object):
 
     def plot_splom(self, heatmaps_objects, path = None):
 
+        '''
+        visualizes a SPLOM of heatmaps that show every possible combination pair of features.
+        This visualization take quite some time, especially when num_feat is great.
+
+        Parameters
+        ----------
+
+        heatmaps_objects: python dictionary or list of dictionaries.
+            (REQUIRED) Data for visualization returned by get_data_splom().
+            If it is a list a splom will be visualized for each cluster.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically generated.
+
+        '''
+
         num_feat = self.num_feat
 
         dictLabtoIndex = self.dictLabtoIndex
@@ -2203,31 +2435,127 @@ class PartialDependence(object):
 
         list_feat = list(dictLabtoIndex.keys())
 
-        fig, axes = plt.subplots(nrows=num_feat, ncols=num_feat, figsize=(10.8,10.8),dpi=100)
+
+
+        clust = False
+        if type(heatmaps_objects) is list:
+            clust = True
+            clust_number = len(heatmaps_objects)
+        label_cluster = ""
+        if type(heatmaps_objects) is tuple:
+            label_cluster = "Cluster #"+str(heatmaps_objects[0]).zfill(2)+" - "
+            heatmaps_objects = heatmaps_objects[1]
+
+
+        if clust:
+            fig = plt.figure(figsize=(16,9), dpi=100)
+            grid_heigth = int(np.ceil(np.sqrt(clust_number)))
+            grid_width = int(np.ceil(clust_number / grid_heigth))
+            outer = gridspec.GridSpec(grid_width, grid_heigth, wspace=0.1, hspace=0.1)
+   
+        else:
+            fig, axes = plt.subplots(nrows=num_feat, ncols=num_feat, figsize=(10.8,10.8), dpi=100)
 
         pairs_of_features = []
         for comb in combinations(list(range(num_feat)), 2):
             pairs_of_features.append(comb)
 
-        for ij in pairs_of_features:
-            i = ij[0]
-            j = ij[1]
-            splom_cell = heatmaps_objects[ij]
-            self.plot_heatmap(splom_cell, plot_object=axes[i,j], for_splom = True)
-            axes[i,j].axis("off")
-            splom_cell.swap_features()
-            self.plot_heatmap(splom_cell, plot_object=axes[j,i], for_splom = True)
-            axes[j,i].axis("off")
+        if clust:
+            from_grid_to_index = {}
+            actual_grid_size = num_feat+1
+            for h in range(int(actual_grid_size**2)):
+                i = int(np.floor(h / actual_grid_size))
+                j = h - i*actual_grid_size
+                from_grid_to_index[(i,j)] = h
 
 
-        for d in range(num_feat):
+        if not clust:
 
-            axes[d,d].annotate( list_feat[d].replace(" ","\n"), 
-                                (0.5, 0.5), 
-                                xycoords='axes fraction',
-                                ha='center', va='center')
+            for ij in pairs_of_features:
+                i = ij[0]
+                j = ij[1]
+                splom_cell = heatmaps_objects[ij]
+                self.plot_heatmap(splom_cell, plot_object=axes[i,j], for_splom = True)
+                axes[i,j].axis("off")
+                swapped_splom_cell = splom_cell.swap_features()
+                self.plot_heatmap(swapped_splom_cell, plot_object=axes[j,i], for_splom = True)
+                axes[j,i].axis("off")
 
-            axes[d,d].axis("off")
+
+            for d in range(num_feat):
+                axes[d,d].annotate( list_feat[d].replace(" ","\n"), 
+                        (0.5, 0.5), 
+                        xycoords='axes fraction',
+                        ha='center', va='center')
+                axes[d,d].axis("off")
+
+
+
+        else:
+            label_size = 15
+            if clust_number > 9:
+                label_size-=5
+            for clstr in range(clust_number):
+
+                inner = gridspec.GridSpecFromSubplotSpec(num_feat+1, num_feat+1, subplot_spec = outer[clstr], wspace = 0.15, hspace = 0.15)
+                heatmaps_objects_cluster = heatmaps_objects[clstr][1]
+                #label_cluster = "#"+str(heatmaps_objects[clstr][0]).zfill(2)
+
+                i_cl = int(np.floor(clstr / grid_heigth))
+                j_cl = clstr - i_cl*grid_heigth
+                display_top = False
+                display_lef= False
+                if i_cl == 0:
+                    display_top = True
+                if j_cl == 0:
+                    display_lef = True
+
+                for ij in pairs_of_features:
+                    i = ij[0]+1
+                    j = ij[1]+1
+                    h_up = from_grid_to_index[(i,j)]
+                    h_down = from_grid_to_index[(j,i)]
+
+
+                    ax = plt.Subplot(fig, inner[h_up])
+
+                    splom_cell = heatmaps_objects_cluster[ij]
+                    self.plot_heatmap(splom_cell, plot_object=ax, for_splom = True)
+                    ax.axis("off")
+                    fig.add_subplot(ax)
+
+                    ax = plt.Subplot(fig, inner[h_down])
+                    swapped_splom_cell = splom_cell.swap_features()
+                    self.plot_heatmap(swapped_splom_cell, plot_object=ax, for_splom = True)
+                    ax.axis("off")
+                    fig.add_subplot(ax)
+
+
+                for f in range(num_feat):
+
+                    h_label_top = from_grid_to_index[(0,f+1)]
+                    h_label_left = from_grid_to_index[(f+1,0)]
+
+                    feat = list_feat[f][:5]+"."
+                    if display_top:
+                        ax = plt.Subplot(fig, inner[h_label_top])
+                        ax.annotate(feat, 
+                                    (0.4, 0), 
+                                    xycoords='axes fraction',
+                                    ha='left', va='bottom',
+                                    size = label_size, rotation = 45)
+                        ax.axis("off")
+                        fig.add_subplot(ax)
+                    if display_lef:
+                        ax = plt.Subplot(fig, inner[h_label_left])
+                        ax.annotate(feat, 
+                                    (1.0, 0.5), 
+                                    xycoords='axes fraction',
+                                    ha='right', va='center',
+                                    size = label_size, rotation = 0)
+                        ax.axis("off")                    
+                        fig.add_subplot(ax)
+
 
 
         color_parameter = 0.5
@@ -2236,14 +2564,24 @@ class PartialDependence(object):
 
         cax = fig.add_axes([0.85, 0.05, 0.05, 0.9])
         cb1 = mpl.colorbar.ColorbarBase(cax, cmap = "RdYlBu", norm = color_scale)
+        if clust:
+            fig.subplots_adjust(top=0.9, bottom=0.05, left=0.05, right=0.8)
+        else:
+            fig.subplots_adjust(wspace = 0.15, hspace = 0.15, top=0.9, bottom=0.05, left=0.05, right=0.8)
 
 
-        fig.subplots_adjust(wspace=0.15, hspace = 0.15, top=0.95, bottom=0.05, left=0.05, right=0.8)
+        font_size_par = 20
+        class_focus = self.cls_fcs
+
+        title_all = label_cluster+'pdp for class: '+class_focus.replace("\n"," ")
+        fig.suptitle(title_all, fontsize=font_size_par)
 
 
         if path is not None:
             if len(path) == 0:
                 path = "splom.png"
+                if clust:
+                    path = "splom_clustering.png"
             fig.savefig(path)
 
         plt.show()

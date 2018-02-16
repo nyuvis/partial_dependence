@@ -89,7 +89,7 @@ By choosing a feature and changing it in the sample range, for each row in the t
 
 Then we are able to compute prediction values for each of the different vectors.
 
-``pdp()`` initialize and returns a python object from the class ``PdpCurves`` containing such predictions values.
+``pdp()`` initialize and returns a python object from the class ``PdpCurves()`` containing such predictions values.
 
 
 Required argument:
