@@ -124,7 +124,7 @@ Here you can find a first example. The visualization is automatically saved in a
 1.4 Clustering 1D partial dependence
 ####################################
 
-To call ``compute_clusters()``, we define the integer number of desired clusters with the ``clust_number`` argument and we provide ``curves``.
+To call ``compute_clusters()``, we define the integer number of desired clusters with the ``n_clusters`` argument and we provide ``curves``.
 
 The function returns a list of ``PdpCurves`` objects. Each element of the list is a different cluster.
 
@@ -195,7 +195,7 @@ It is possible to cluster all the test instances (using the RMSE metric) and to 
 .. code:: python
 
     all_inst = my_pdp_plot.pdp_2D("alcohol", "density")
-    list_clust_heats = my_pdp_plot.compute_clusters(all_inst, clust_number = 16)
+    list_clust_heats = my_pdp_plot.compute_clusters(all_inst, n_clusters = 16)
     my_pdp_plot.plot_heatmap(list_clust_heats)
 
 .. image:: images/clust_heats_test.png
@@ -257,7 +257,7 @@ With the following code we can cluster the SPLOMs of the entire test-set.
 .. code:: python
 
     sploms_objs = my_pdp_plot.get_data_splom()
-    list_clust_sploms = my_pdp_plot.compute_clusters(sploms_objs, clust_number = 16)
+    list_clust_sploms = my_pdp_plot.compute_clusters(sploms_objs, n_clusters = 16)
 
 We can now plot the first cluster in the following way:
 
@@ -283,6 +283,20 @@ To have an overview over the entire set of clusters:
     :align: center
     :height: 1080px
     :alt: alternate text
+
+The distance matrix is stored, so it is less time consuming to change the number of clusters and plot again.
+
+.. code:: python
+
+    list_clust_sploms = my_pdp_plot.compute_clusters(sploms_objs, n_clusters = 49)
+    my_pdp_plot.plot_splom(list_clust_sploms)
+
+.. image:: images/cluster_sploms_49.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
 
 ****************************************
 2. Customization and extra functions

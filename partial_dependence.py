@@ -26,10 +26,7 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
 
-try: # python 2.x
-    import cPickle as pickle
-except ImportError:  # python 3.x
-    import pickle
+
 
 
 
@@ -802,7 +799,7 @@ class PartialDependence(object):
 
 
     
-    def compute_clusters(self, curves, clust_number=5):
+    def compute_clusters(self, curves, n_clusters=5):
 
         """
         Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
@@ -815,13 +812,13 @@ class PartialDependence(object):
         curves : python object
             (REQUIRED) Returned by previous function pdp() or pdp_2D() or get_data_splom().
 
-        clust_number : integer value
+        n_clusters : integer value
             (OPTIONAL) [default = 5] The number of desired clusters.
 
         Returns
         -------
 
-        the_list_sorted : list of size clust_number with tuples: ( label cluster (float), python object OR dictionary of python objects (SPLOM data) )
+        the_list_sorted : list of size n_clusters with tuples: ( label cluster (float), python object OR dictionary of python objects (SPLOM data) )
             (ALWAYS) Each element is an object from the class PdpCurves() or Pdp2DCurves() representing a different cluster.
             This list is sorted using the clustering distance matrix taking the biggest cluster first, 
             then the closest cluster by average distance next and so on.
@@ -852,7 +849,7 @@ class PartialDependence(object):
             distance_matrix = np.sqrt(distance_matrix/num_squares_summed)
 
 
-        clust = AgglomerativeClustering(affinity = 'precomputed', n_clusters = clust_number, linkage = 'average')
+        clust = AgglomerativeClustering(affinity = 'precomputed', n_clusters = n_clusters, linkage = 'average')
 
         clust.fit(distance_matrix)
 
@@ -908,7 +905,7 @@ class PartialDependence(object):
         else:
             heats_list = []
             labels_list = []
-            for i in range(clust_number):
+            for i in range(n_clusters):
                 heats_list.append({})
                 labels_list.append(None)
 
@@ -916,7 +913,7 @@ class PartialDependence(object):
                 curves[ij].set_dm(distance_matrix)
                 list_heatmaps = split_and_sort(curves[ij])
 
-                for i in range(clust_number):
+                for i in range(n_clusters):
                     label_cluster = list_heatmaps[i][0]
                     heat_obj = list_heatmaps[i][1]
   
@@ -930,7 +927,7 @@ class PartialDependence(object):
 
                     heats_list[i][ij] = heat_obj
 
-            return [ (labels_list[i], heats_list[i]) for i in range(clust_number) ]
+            return [ (labels_list[i], heats_list[i]) for i in range(n_clusters) ]
 
 
 
@@ -1093,7 +1090,7 @@ class PartialDependence(object):
             if single_cluter and plot_object is None:
                 ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)
             elif cell_view and multi_clusters:
-                if clust_number <= 15:
+                if n_clusters <= 15:
                     ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2.split(" : ")[1], fontsize=font_size_par)
                 else:
                     ax.set_title("")
@@ -1161,7 +1158,7 @@ class PartialDependence(object):
 
 
             else:
-                if clust_number > 15:
+                if n_clusters > 15:
 
                     ax.text(0.5,
                             0.5,
@@ -1245,7 +1242,7 @@ class PartialDependence(object):
 
 
         single_cluter = False
-        clust_number = None
+        n_clusters = None
         multi_clusters = False
 
         if type(curves_input) == tuple:
@@ -1255,7 +1252,7 @@ class PartialDependence(object):
 
         if type(curves_input) == list:
             multi_clusters = True
-            clust_number = len(curves_input)
+            n_clusters = len(curves_input)
 
         if not multi_clusters and not single_cluter:
             single_curve = curves_input
@@ -1265,16 +1262,16 @@ class PartialDependence(object):
         if plot_object is None:
             if cell_view and multi_clusters:
 
-                grid_heigth = int(np.ceil(np.sqrt(clust_number)))
-                grid_width = int(np.ceil(clust_number / grid_heigth))
+                grid_heigth = int(np.ceil(np.sqrt(n_clusters)))
+                grid_width = int(np.ceil(n_clusters / grid_heigth))
 
 
                 grid_heigth_real = grid_heigth
                 grid_width_real = grid_width
-                if grid_heigth*grid_width == clust_number:
+                if grid_heigth*grid_width == n_clusters:
 
-                    grid_heigth = int(np.ceil(np.sqrt(clust_number+1)))
-                    grid_width = int(np.ceil((clust_number+1) / grid_heigth))
+                    grid_heigth = int(np.ceil(np.sqrt(n_clusters+1)))
+                    grid_width = int(np.ceil((n_clusters+1) / grid_heigth))
 
 
                 col_plot_init = -1
@@ -1326,10 +1323,10 @@ class PartialDependence(object):
                                        '#fdbf6f',
                                        '#cab2d6']
 
-                if len(color_plot_original) < clust_number:
+                if len(color_plot_original) < n_clusters:
                     color_plot = []
                     i_color = 0
-                    for i in range(clust_number):
+                    for i in range(n_clusters):
                         color_plot.append(color_plot_original[i_color])
                         i_color+=1
                         if i_color == len(color_plot_original) - 1:
@@ -1338,7 +1335,7 @@ class PartialDependence(object):
                     color_plot = color_plot_original
 
 
-            for i in range(clust_number):
+            for i in range(n_clusters):
 
 
                 single_curve = curves_input[i][1]
@@ -1393,7 +1390,7 @@ class PartialDependence(object):
                             axes_plot.set_ylabel("")
                             axes_plot.yaxis.set_ticklabels([])
 
-                    if row_plot_init != grid_heigth_real-1 and i != clust_number-1:
+                    if row_plot_init != grid_heigth_real-1 and i != n_clusters-1:
                             axes_plot.set_xlabel("")
                             axes_plot.xaxis.set_ticklabels([])
 
@@ -1513,12 +1510,12 @@ class PartialDependence(object):
                     ax_object = ax[i,j]
                     ax_object_count+=1
 
-                    if clust_number <= 15:
+                    if n_clusters <= 15:
 
-                        if (ax_object_count > clust_number and not extra_space) or (extra_space and (i > grid_width_real-1 or j > grid_width_real-1)):
+                        if (ax_object_count > n_clusters and not extra_space) or (extra_space and (i > grid_width_real-1 or j > grid_width_real-1)):
                             ax_object.axis("off")
 
-                        if (ax_object_count == clust_number + 1 and not extra_space) or (extra_space and j == 0 and i == grid_heigth - 1):
+                        if (ax_object_count == n_clusters + 1 and not extra_space) or (extra_space and j == 0 and i == grid_heigth - 1):
 
                             ax_object.legend( handles=patches1, bbox_to_anchor=(0,1), 
                                 loc="upper left", ncol=1, 
@@ -1550,19 +1547,19 @@ class PartialDependence(object):
 
             else:
                 if not extra_space:
-                    if clust_number == 11:
+                    if n_clusters == 11:
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.2,left=.05, right=.95)
-                    elif clust_number > 11 and clust_number < 15:
+                    elif n_clusters > 11 and n_clusters < 15:
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.08,left=.05, right=.95)
-                    elif clust_number == 15:
+                    elif n_clusters == 15:
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.3,left=.05, right=.95)
                     else:
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.1,left=.05, right=.95)
                 else:
-                    if clust_number > 15:
+                    if n_clusters > 15:
                         # 16 25 ...
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
-                    elif clust_number >= 9 and clust_number < 15:
+                    elif n_clusters >= 9 and n_clusters < 15:
                         #9
                         fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
                     else:
@@ -1967,10 +1964,10 @@ class PartialDependence(object):
             
             if clustering:
                 string_clust = "Cluster "
-                if clust_number > 12:
+                if n_clusters > 12:
                     string_clust ="#"
                     font_title -=2
-                    if clust_number > 30:
+                    if n_clusters > 30:
                         font_title -=2
                 axis.set_title(string_clust+str(label_cluster).zfill(2)+ " - size: "+size, fontsize=font_title)
 
@@ -2043,9 +2040,9 @@ class PartialDependence(object):
                 num_ticks = min(num_samples,20)
             else:
                 num_ticks = min(num_samples,20)
-                if clust_number > 2:
+                if n_clusters > 2:
                     num_ticks = min(num_samples,10)
-                    if clust_number > 12:
+                    if n_clusters > 12:
                         num_ticks = min(num_samples,4)
 
 
@@ -2166,7 +2163,7 @@ class PartialDependence(object):
         clust_flag = False
         if type(curves_objs) is list:
             clust_flag = True
-            clust_number = len(curves_objs)
+            n_clusters = len(curves_objs)
 
             if plot_object is not None:
 
@@ -2174,8 +2171,8 @@ class PartialDependence(object):
 
             else:
 
-                grid_heigth = int(np.ceil(np.sqrt(clust_number)))
-                grid_width = int(np.ceil(clust_number / grid_heigth))
+                grid_heigth = int(np.ceil(np.sqrt(n_clusters)))
+                grid_width = int(np.ceil(n_clusters / grid_heigth))
 
 
                 col_plot_init = -1
@@ -2184,7 +2181,7 @@ class PartialDependence(object):
                 fig, ax = plt.subplots( figsize=(10.8,10.8), nrows=grid_heigth, ncols=grid_width, dpi=100)
 
 
-                for i in range(clust_number):
+                for i in range(n_clusters):
 
                     if i /  grid_heigth < col_plot_init + 1:
 
@@ -2206,7 +2203,7 @@ class PartialDependence(object):
                     font_size_par = 15
 
                     single_heatmap (curves_objs[i], plot_obj = axes_plot, clustering = True)
-                    if clust_number > 16:
+                    if n_clusters > 16:
                         axes_plot.axis("off")
 
                 while True:
@@ -2253,11 +2250,11 @@ class PartialDependence(object):
                 lef = 0.1
                 rig = 0.85
 
-                if clust_number > 6:
+                if n_clusters > 6:
                     w_s += 0.05
-                    if clust_number > 9:
+                    if n_clusters > 9:
                         h_s += 0.1
-                        if clust_number > 12:
+                        if n_clusters > 12:
                             w_s += 0.1
 
 
@@ -2303,10 +2300,6 @@ class PartialDependence(object):
             (OPTIONAL) [default = False] If True sampling of each feature is around its mean value from the set instances_input.
                          if False sampling goes from min to max of each feature, 
                          therefore all outliers will be part of the sample ranges.
-
-        path: string
-            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the data in a pickle file.
-            If an empty string is given, the name of the file is automatically generated.
 
         Returns
         -------
@@ -2410,11 +2403,6 @@ class PartialDependence(object):
 
             cell_object_dict[ij] = splom_cell
 
-        if path is not None:
-            if len(path)==0:
-                path = "splom_data.pkl"
-            with open(path, 'wb') as handle:
-                pickle.dump(cell_object_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         return cell_object_dict
 
@@ -2453,7 +2441,7 @@ class PartialDependence(object):
         clust = False
         if type(heatmaps_objects) is list:
             clust = True
-            clust_number = len(heatmaps_objects)
+            n_clusters = len(heatmaps_objects)
         label_cluster = ""
         if type(heatmaps_objects) is tuple:
             label_cluster = "Cluster #"+str(heatmaps_objects[0]).zfill(2)+" - "
@@ -2462,8 +2450,8 @@ class PartialDependence(object):
 
         if clust:
             fig = plt.figure(figsize=(16,9), dpi=100)
-            grid_heigth = int(np.ceil(np.sqrt(clust_number)))
-            grid_width = int(np.ceil(clust_number / grid_heigth))
+            grid_heigth = int(np.ceil(np.sqrt(n_clusters)))
+            grid_width = int(np.ceil(n_clusters / grid_heigth))
             outer = gridspec.GridSpec(grid_width, grid_heigth, wspace=0.1, hspace=0.1)
    
         else:
@@ -2505,29 +2493,43 @@ class PartialDependence(object):
 
 
         else:
+
             label_size = 15
-            if clust_number > 9:
-                label_size-=5
-            for clstr in range(clust_number):
+            len_feat = 5
+            if n_clusters > 9:
+                label_size -=5
+                len_feat -= 1
+                if n_clusters >= 25:
+                    label_size -=2
+                    len_feat -= 1
+                    if n_clusters >= 49:
+                        label_size -=2
+                        len_feat -= 1
+
+            for clstr in range(n_clusters):
 
                 inner = gridspec.GridSpecFromSubplotSpec(num_feat+1, num_feat+1, subplot_spec = outer[clstr], wspace = 0.15, hspace = 0.15)
                 heatmaps_objects_cluster = heatmaps_objects[clstr][1]
-                #label_cluster = "#"+str(heatmaps_objects[clstr][0]).zfill(2)
+                label_cluster_cell = "#"+str(heatmaps_objects[clstr][0]).zfill(2)
+
+                size_cluster = str(len(heatmaps_objects_cluster[(0,1)].get_ixs()))
+
+                label_cluster_cell = label_cluster_cell + " - size: " + size_cluster
 
                 i_cl = int(np.floor(clstr / grid_heigth))
                 j_cl = clstr - i_cl*grid_heigth
-                display_top = False
+                display_bot = False
                 display_lef= False
-                if i_cl == 0:
-                    display_top = True
+                if i_cl == grid_heigth-1:
+                    display_bot = True
                 if j_cl == 0:
                     display_lef = True
 
                 for ij in pairs_of_features:
-                    i = ij[0]+1
+                    i = ij[0]
                     j = ij[1]+1
                     h_up = from_grid_to_index[(i,j)]
-                    h_down = from_grid_to_index[(j,i)]
+                    h_down = from_grid_to_index[(j-1,i+1)]
 
 
                     ax = plt.Subplot(fig, inner[h_up])
@@ -2546,16 +2548,20 @@ class PartialDependence(object):
 
                 for f in range(num_feat):
 
-                    h_label_top = from_grid_to_index[(0,f+1)]
-                    h_label_left = from_grid_to_index[(f+1,0)]
+                    h_label_bot = from_grid_to_index[(num_feat,f+1)]
+                    h_label_left = from_grid_to_index[(f,0)]
 
-                    feat = list_feat[f][:5]+"."
-                    if display_top:
-                        ax = plt.Subplot(fig, inner[h_label_top])
+                    feat = list_feat[f]
+                    feat = feat.split(" ")[0]
+                    if len(feat) > len_feat:
+                        feat = feat[:len_feat]+"."
+
+                    if display_bot:
+                        ax = plt.Subplot(fig, inner[h_label_bot])
                         ax.annotate(feat, 
-                                    (0.4, 0), 
+                                    (0.4, 1.0), 
                                     xycoords='axes fraction',
-                                    ha='left', va='bottom',
+                                    ha='center', va='top',
                                     size = label_size, rotation = 45)
                         ax.axis("off")
                         fig.add_subplot(ax)
@@ -2568,6 +2574,23 @@ class PartialDependence(object):
                                     size = label_size, rotation = 0)
                         ax.axis("off")                    
                         fig.add_subplot(ax)
+
+                i_label_cl = int(np.floor(num_feat/2))+1
+                j_label_cl = i_label_cl
+
+                h_label_cl = from_grid_to_index[(i_label_cl,j_label_cl)]
+
+
+                ax = plt.Subplot(fig, inner[h_label_cl])
+                ax.annotate(label_cluster_cell, 
+                            (0.5, +(1.0*(i_label_cl+2)+0.5)), 
+                            xycoords='axes fraction',
+                            ha='center', va='center',
+                            size = label_size+4, rotation = 0, alpha = 1.0)
+                ax.axis("off")
+                fig.add_subplot(ax)
+
+
 
 
 
