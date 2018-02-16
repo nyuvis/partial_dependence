@@ -278,7 +278,7 @@ To have an overview over the entire set of clusters:
 
     my_pdp_plot.plot_splom(list_clust_sploms)
 
-.. image:: images/clust_heats_test.png
+.. image:: images/cluster_sploms.png
     :width: 1080px
     :align: center
     :height: 1080px
