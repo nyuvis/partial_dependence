@@ -259,18 +259,6 @@ With the following code we can cluster the SPLOMs of the entire test-set.
     sploms_objs = my_pdp_plot.get_data_splom()
     list_clust_sploms = my_pdp_plot.compute_clusters(sploms_objs, n_clusters = 16)
 
-We can now plot the first cluster (cluster with label "#8" in the left top corner) in the following way:
-
-.. code:: python
-
-    my_pdp_plot.plot_splom(list_clust_sploms[0])
-
-
-.. image:: images/first_cluster_splom.png
-    :width: 1080px
-    :align: center
-    :height: 1080px
-    :alt: alternate text
 
 To have an overview over the entire set of clusters:
 
@@ -279,6 +267,19 @@ To have an overview over the entire set of clusters:
     my_pdp_plot.plot_splom(list_clust_sploms)
 
 .. image:: images/cluster_sploms.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+We can now plot the first cluster (cluster with label "#8" in the left top corner of the last viz)
+
+.. code:: python
+
+    my_pdp_plot.plot_splom(list_clust_sploms[0])
+
+
+.. image:: images/first_cluster_splom.png
     :width: 1080px
     :align: center
     :height: 1080px
