@@ -1,12 +1,13 @@
 partial_dependence
 ==================
 
-A library for plotting partial dependence patterns of machine learning classifiers.
-Partial dependence measures the prediction change when changing one or more input features.
-We will focus only on 1D partial dependence plots. 
-For each instance in the data we can plot the prediction change as we change a single feature in a defined sample range.
-Then we cluster similar plots, e.g., instances reacting similarly when a feature value changes, to reduce clutter.
+A python library for plotting partial dependence patterns of machine learning classifiers.
 The technique is a black box approach to recognize sets of instances where the model makes similar decisions.
+
+Partial dependence measures the prediction change when changing one or more input features.
+We will focus only on 1D and 2D partial dependence plots. 
+For each instance in the data we can plot the prediction change as we change one or two features in defined sample ranges.
+Then we cluster similar plots or heatmaps, e.g., instances reacting similarly when a feature value changes, to reduce clutter.
 
 You can install *partial_dependence* via
 
@@ -244,8 +245,44 @@ For example there is an enclaved blue area within the heatmap cell for *pH* and 
     :height: 1080px
     :alt: alternate text
 
+1.9 Clustering SPLOMs
+#####################
+
+Each instance SPLOM can be represented by a long vector of prediction values.
+The vector is created by appending the data from each unique heatmap in a SPLOM.
+We can measure the distance among different instances SPLOMs by computing RMSE among such vectors.
+By building an RMSE distance matrix and clustering the instances we are able to represent a SPLOM for each cluster set.
+With the following code we can cluster the SPLOMs of the entire test-set. 
+
+.. code:: python
+
+    sploms_objs = my_pdp_plot.get_data_splom()
+    list_clust_sploms = my_pdp_plot.compute_clusters(sploms_objs, clust_number = 16)
+
+We can now plot the first cluster in the following way:
+
+.. code:: python
+
+    my_pdp_plot.plot_splom(list_clust_sploms[0])
 
 
+.. image:: images/first_cluster_splom.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
+
+To have an overview over the entire set of clusters:
+
+.. code:: python
+
+    my_pdp_plot.plot_splom(list_clust_sploms)
+
+.. image:: images/clust_heats_test.png
+    :width: 1080px
+    :align: center
+    :height: 1080px
+    :alt: alternate text
 
 ****************************************
 2. Customization and extra functions
