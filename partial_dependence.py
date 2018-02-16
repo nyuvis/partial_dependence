@@ -26,7 +26,10 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
 
-
+try: # python 2.x
+    import cPickle as pickle
+except ImportError:  # python 3.x
+    import pickle
 
 
 
@@ -818,7 +821,7 @@ class PartialDependence(object):
         Returns
         -------
 
-        the_list_sorted : list of size clust_number with tuples: ( label cluster (float), python object )
+        the_list_sorted : list of size clust_number with tuples: ( label cluster (float), python object OR dictionary of python objects (SPLOM data) )
             (ALWAYS) Each element is an object from the class PdpCurves() or Pdp2DCurves() representing a different cluster.
             This list is sorted using the clustering distance matrix taking the biggest cluster first, 
             then the closest cluster by average distance next and so on.
@@ -2284,7 +2287,7 @@ class PartialDependence(object):
 
 
 
-    def get_data_splom(self, instances_input = None, zoom_on_mean = False):
+    def get_data_splom(self, instances_input = None, zoom_on_mean = False, path = None):
 
         '''
         Creates the data needed for a SPLOM visualization starting from a list of indexes relative to the desired instances to visualize:
@@ -2300,6 +2303,10 @@ class PartialDependence(object):
             (OPTIONAL) [default = False] If True sampling of each feature is around its mean value from the set instances_input.
                          if False sampling goes from min to max of each feature, 
                          therefore all outliers will be part of the sample ranges.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the data in a pickle file.
+            If an empty string is given, the name of the file is automatically generated.
 
         Returns
         -------
@@ -2403,6 +2410,12 @@ class PartialDependence(object):
 
             cell_object_dict[ij] = splom_cell
 
+        if path is not None:
+            if len(path)==0:
+                path = "splom_data.pkl"
+            with open(path, 'wb') as handle:
+                pickle.dump(cell_object_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return cell_object_dict
 
 
@@ -2418,7 +2431,7 @@ class PartialDependence(object):
         ----------
 
         heatmaps_objects: python dictionary or list of dictionaries.
-            (REQUIRED) Data for visualization returned by get_data_splom().
+            (REQUIRED) Data for visualization returned by get_data_splom() or by compute_clusters().
             If it is a list a splom will be visualized for each cluster.
 
         path: string
