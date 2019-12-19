@@ -25,10 +25,14 @@ from matplotlib.legend import Legend
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
+import math
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
+def custom_formatwarning(msg, *args, **kwargs):
+    return str(msg) + '\n'
 
-
-
+warnings.formatwarning = custom_formatwarning
 
 
 try:
@@ -2621,4 +2625,1700 @@ class PartialDependence(object):
             fig.savefig(path)
 
         plt.show()
-        plt.close("all")
+        plt.close("all")  
+    def plot2(self,
+                 curves_input,
+                 color_plot = None,
+                 thresh = 0.5,
+                 local_curves = False,
+                 chosen_row_preds_to_plot = None,
+                 plot_full_curves = False,
+                 plot_object = None,
+                 cell_view = False,
+                 path = None,
+                font_size=12):
+
+
+            fix = self.the_feature
+            class_array = self.cls_arr
+            model = self.mdl
+            df_test = self.df
+
+
+            num_samples = self.n_smpl
+
+
+            data_set_pred_index = self.data_set_pred_index
+
+
+            def plotting_prediction_changes( single_curve_object, 
+                                            color_curve = "blue",
+                                            spag = False, 
+                                            pred_spag = None, 
+                                            chosen_row_preds = None, 
+                                            full_curves = False,
+                                            plot_object = None,
+                                            ticks_color = "black"):
+
+
+
+                dist_matrix = single_curve_object.get_dm()
+                pred_matrix = single_curve_object.get_preds()
+                rWarped = single_curve_object.get_keogh_radius()
+                indices_from_test = single_curve_object.get_ixs()
+
+                if plot_object is not None:
+                    ax = plot_object
+
+                else:
+                    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+
+
+
+
+
+                def b_spline(x,y):
+                    n_local_points = len(x)
+                    t = range(n_local_points)
+                    ipl_t = np.linspace(0.0, n_local_points - 1, 100)
+
+                    x_tup = si.splrep(t, x, k=3)
+                    y_tup = si.splrep(t, y, k=3)
+
+                    x_list = list(x_tup)
+                    xl = x.tolist()
+                    size_seros = len(x_list[1]) - len(xl)
+                    x_list[1] = xl + np.zeros(size_seros).tolist()
+
+                    y_list = list(y_tup)
+                    yl = y.tolist()
+                    size_seros = len(y_list[1]) - len(yl)
+                    y_list[1] = yl + np.zeros(size_seros).tolist()
+
+                    x_i = si.splev(ipl_t, x_list)
+                    y_i = si.splev(ipl_t, y_list)
+                    return x_i, y_i
+
+                dictLabtoIndex = self.dictLabtoIndex
+                original_preds = self.original_preds
+                changing_rows = self.changing_rows
+                df_sample = self.df_sample
+                df_features = self.df_features
+
+                trasparenza = 0.1
+                dot_size = 5
+
+                #cmap = plt.get_cmap("gist_rainbow")
+                #cmap = plt.get_cmap("RdYlBu")
+                # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
+
+                original_data_sample = self._back_to_the_original(list(df_sample[fix]), fix)
+
+                top_label = class_array[data_set_pred_index]
+                #t = time.time()
+                num_rows = len(pred_matrix)
+
+                if single_cluter and plot_object is None:
+                    ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)    #setting title for the graph
+                elif cell_view and multi_clusters:
+                    if n_clusters <= 15:
+                        ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2.split(" : ")[1], fontsize=font_size_par)    #setting title for the graph
+                    else:
+                        ax.set_title("")
+                #else:
+                    #ax.set_title("1D partial dependency of " + fix + " with " + top_label, fontsize=font_size_par) #setting title for the graph
+                    #ax.set_title(fix, fontsize=14)
+
+                if full_curves:
+                    for i in range(num_rows):
+                        ax.plot(original_data_sample,pred_matrix[i],color=color_curve,alpha=trasparenza)
+
+                if spag:                           #ploting the data points
+                    for j in indices_from_test:
+
+                        low_spag = originalIndex - howFarIndex
+                        high_spag = originalIndex + howFarIndex + 1
+
+                        NowSample =allSamplesOriginal[fix + "-o-" + str(j)][low_spag:high_spag]
+
+                        NowPreds = pred_spag[j, low_spag:high_spag]
+
+                        #plt.plot(NowSample,NowPreds,alpha=trasparenza,color=colors_10_cluster[i])
+                        x_i, y_i = b_spline(np.array(NowSample), np.array(NowPreds))
+                        ax.plot(x_i, y_i, alpha=0.8, color=ticks_color)
+
+                else:
+                    x_point = changing_rows[indices_from_test, dictLabtoIndex[fix]]
+                    x_point = self._back_to_the_original(x_point, fix)
+                    y_point = original_preds[indices_from_test]
+                    #ax.scatter(x_point, y_point, c=ticks_color, s=dot_size)    #ploting the data points
+
+                if not full_curves:
+                    mean_preds = np.array([ np.mean(pred_matrix[:, i]) for i in range(num_samples) ])
+                    std_preds = np.array([ np.std(pred_matrix[:, i]) for i in range(num_samples) ])
+                    #plt.plot(original_data_sample,mean_preds,color="red",alpha=1)
+                    ax.fill_between(original_data_sample, mean_preds-std_preds, mean_preds+std_preds,color=color_curve,alpha=0.25)
+                    ax.fill_between(original_data_sample, mean_preds-0.0001, mean_preds+0.0001,color=color_curve,alpha=0.75)
+                    #print(original_data_sample)
+                    #print(repr(mean_preds))
+
+                if chosen_row_preds is not None:
+                    ax.plot(original_data_sample,chosen_row_preds,color="red",lw=2)   #plots the single vectors as red line
+
+                the_mean_value = self._back_to_the_original(df_features["mean"][fix], fix)
+                #if not cell_view:
+                    #ax.axvline(x=the_mean_value, color="green", linestyle='--')
+                    #ax.axhline(y=thresh, color="red", linestyle='--')
+                ax.set_ylabel("prediction", fontsize=font_size_par)
+
+                #ax.set_xlabel(fix, fontsize=font_size_par)
+                ax.set_xlim([original_data_sample[0], original_data_sample[num_samples-1]])
+                ax.set_ylim([0, 1])
+
+                if not cell_view:
+
+                    #pred = 1
+                    top_label = class_array[data_set_pred_index]
+
+                    #ax.text(-0.09, 0.95, top_label, fontsize=font_size_par, transform=ax.transAxes)  #right axis labels
+
+                    #pred = 0
+                    origin_label = class_array[1 - data_set_pred_index]
+
+                    if len(class_array) > 2:
+                        origin_label = "not "+top_label
+
+                    #ax.text(-0.09, 0.05, origin_label, fontsize=font_size_par, transform=ax.transAxes)  #right axis labels
+
+
+
+                else:
+                    if n_clusters > 15:
+
+                        ax.text(0.5,
+                                0.5,
+                                "#"+str(label_title_cluster).zfill(2),
+                                fontsize=font_size_par+10,
+                                transform=ax.transAxes, 
+                                ha = "center",
+                                va = "center",
+                                alpha = 0.25)
+
+
+
+            def pdp_local(fix, allSamples, chosen_row=None):
+
+
+                list_local_sampling = self.list_local_sampling
+
+                dictLabtoIndex = self.dictLabtoIndex
+                rows = self.changing_rows
+                num_feat = self.num_feat
+
+                num_rows = len(rows)
+                #print("changing up",num_rows,"rows")
+                new_matrix_f = np.zeros((num_rows, num_samples + 1, num_feat))
+                depth_index = 0
+                i = 0
+                for r in rows:
+                    sample_vals = list_local_sampling[i][fix]
+                    allSamples[fix + "-o-" + str(i)] = sample_vals
+                    #if float(i+1)%10000==0:
+                        #print ("---- loading matrix: ", np.round(i/float(num_rows),decimals=2)*100,"%")
+                        #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+                    i+=1
+                    index_height = 0
+                    for v in sample_vals:
+                        new_r = np.copy(r)
+                        new_r[dictLabtoIndex[fix]] = v
+                        new_matrix_f[depth_index][index_height] = new_r
+                        index_height += 1
+                    depth_index += 1
+
+                if chosen_row is not None:
+                    chosen_row_alterations = []
+
+                    for v in sample_vals:
+                        arow = np.copy(chosen_row)
+                        arow[dictLabtoIndex[fix]] = v
+                        chosen_row_alterations.append(arow)
+
+                    return new_matrix_f, np.array(chosen_row_alterations), allSamples
+                return new_matrix_f, allSamples
+
+            def compute_pred_local(matrix_changed_rows, chosen_row_alterations=None):
+                num_feat = self.num_feat
+                data_set_pred_index = self.data_set_pred_index
+                numS = num_samples + 1
+                #t = time.time()
+                num_rows= len(matrix_changed_rows)
+                pred_matrix = np.zeros((num_rows, numS))
+                matrix_changed_rows = matrix_changed_rows.reshape((num_rows * numS, num_feat))
+                ps = model.predict_proba(matrix_changed_rows)
+                ps = [ x[data_set_pred_index] for x in ps ]
+                k = 0
+                for i in range(0, num_rows * numS):
+                    if i % numS ==0:
+                        pred_matrix[k] = ps[i:i + numS]
+                        k += 1
+                if chosen_row_alterations is not None:
+                    chosen_row_preds = model.predict_proba(chosen_row_alterations)
+                    chosen_row_preds = [ x[data_set_pred_index] for x in chosen_row_preds ]
+                    return pred_matrix, chosen_row_preds
+                return pred_matrix
+
+
+
+            ###########################
+            # WHERE THE MAGIC HAPPENS #
+            ###########################
+
+            font_size_par = font_size
+
+
+            single_cluter = False
+            n_clusters = None
+            multi_clusters = False
+
+            if type(curves_input) == tuple:
+                single_cluter = True
+                label_title_cluster = curves_input[0]
+                single_curve = curves_input[1]
+
+            if type(curves_input) == list:
+                multi_clusters = True
+                n_clusters = len(curves_input)
+
+            if not multi_clusters and not single_cluter:
+                single_curve = curves_input
+
+
+
+            if plot_object is None:
+                if cell_view and multi_clusters:
+
+                    grid_heigth = int(np.ceil(np.sqrt(n_clusters)))
+                    grid_width = int(np.ceil(n_clusters / grid_heigth))
+
+
+                    grid_heigth_real = grid_heigth
+                    grid_width_real = grid_width
+                    if grid_heigth*grid_width == n_clusters:
+
+                        grid_heigth = int(np.ceil(np.sqrt(n_clusters+1)))
+                        grid_width = int(np.ceil((n_clusters+1) / grid_heigth))
+
+
+                    col_plot_init = -1
+                    row_plot_init = 0
+
+                    fig, ax = plt.subplots(nrows=grid_heigth, ncols=grid_width, figsize=(16, 9), dpi=100)
+                else:
+                    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+            else:
+                ax = plot_object
+                old_label = ax.get_legend_handles_labels()
+                handles = old_label[0]
+                labels = old_label[1]
+                old_text1 = labels[::2]
+                old_text2 = labels[1::2]
+                old_patches1 = handles[::2]
+                old_patches2 = handles[1::2]
+
+            preds_local = None
+
+            if local_curves:
+                originalIndex = int(num_samples / 2)
+                howFarIndex = int(np.ceil(2/100 * num_samples))
+                howFarIndex = max([2,howFarIndex])
+                allSamples = {}
+
+                the_matrix_local, allSamples = pdp_local(fix,allSamples)
+                preds_local = compute_pred_local(the_matrix_local)
+
+                allSamplesOriginal = {}
+                for key in allSamples:
+                    allSamplesOriginal[key] = self._back_to_the_original(allSamples[key], key.split("-o-")[0])
+
+
+            texts1 = []
+            texts2 = []
+            color_legend = []
+            end_plot = False
+            if multi_clusters:
+                if color_plot is None:
+                    color_plot_original = ['#1f78b4',
+                                           '#33a02c',
+                                           '#e31a1c',
+                                           '#ff7f00',
+                                           '#6a3d9a',
+                                           '#a6cee3',
+                                           '#b2df8a',
+                                           '#fb9a99',
+                                           '#fdbf6f',
+                                           '#cab2d6']
+
+                    if len(color_plot_original) < n_clusters:
+                        color_plot = []
+                        i_color = 0
+                        for i in range(n_clusters):
+                            color_plot.append(color_plot_original[i_color])
+                            i_color+=1
+                            if i_color == len(color_plot_original) - 1:
+                                i_color = 0
+                    else:
+                        color_plot = color_plot_original
+
+
+                for i in range(n_clusters):
+
+
+                    single_curve = curves_input[i][1]
+                    label_title_cluster = curves_input[i][0]
+
+                    dist_matrix_this = single_curve.get_dm()
+                    sizeClust = len(single_curve.get_ixs())
+                    if sizeClust == 1:
+                        avgRmse = 0
+                    else:
+                        avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
+
+                    label1 = " : " + str(avgRmse)
+                    label2 = " : " + str(sizeClust)
+
+                    texts1.append("Clust. " + str(label_title_cluster) + label1)
+                    texts2.append("Clust. " + str(label_title_cluster) + label2)
+                    color_legend.append(color_plot[i])
+
+                    if cell_view:
+                        font_size_par = 15
+
+                        if i /  grid_heigth_real < col_plot_init + 1:
+                            #print("same_row:",i /  grid_heigth,"<",col_plot_init + 1)
+                            col_plot = col_plot_init 
+                            row_plot = row_plot_init + 1
+                        else:
+                            col_plot = col_plot_init + 1
+                            row_plot = 0
+                        #print("r:",col_plot,"- c:",row_plot)
+                        axes_plot = ax[row_plot,col_plot]
+
+                        col_plot_init = col_plot
+                        row_plot_init = row_plot
+
+                    else:
+                        axes_plot = ax                    
+
+                    plotting_prediction_changes(
+                                single_curve_object = single_curve, 
+                                color_curve = color_plot[i],
+                                ticks_color = color_plot[i],
+                                spag = local_curves, 
+                                pred_spag = preds_local, 
+                                chosen_row_preds = chosen_row_preds_to_plot, 
+                                full_curves = plot_full_curves,
+                                plot_object = axes_plot)
+
+                    if cell_view:
+
+                        if col_plot_init != 0:
+                                axes_plot.set_ylabel("")
+                                axes_plot.yaxis.set_ticklabels([])
+
+                        if row_plot_init != grid_heigth_real-1 and i != n_clusters-1:
+                                axes_plot.set_xlabel("")
+                                axes_plot.xaxis.set_ticklabels([])
+
+
+            else:
+                if color_plot is None:
+                    color_plot = "blue"
+                    ticks_color = "black"
+                else:
+                    ticks_color = color_plot
+
+                dist_matrix_this = single_curve.get_dm()
+                sizeClust = len(single_curve.get_ixs())
+
+
+
+                if sizeClust == 1 or dist_matrix_this is None:
+                    avgRmse = 0
+
+                else:
+                    avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
+
+                if single_cluter:
+                    string_legend = "Clust. " + str(label_title_cluster) + " : "
+                else:
+                    string_legend = " : "
+
+                label1 = string_legend + str(avgRmse)
+                label2 = string_legend + str(sizeClust)
+
+                texts1.append(label1)
+                texts2.append(label2)
+
+                color_legend.append(color_plot)
+
+                plotting_prediction_changes(single_curve_object = single_curve, 
+                                            color_curve = color_plot,
+                                            ticks_color = ticks_color,
+                                            spag = local_curves, 
+                                            pred_spag = preds_local, 
+                                            chosen_row_preds = chosen_row_preds_to_plot, 
+                                            full_curves = plot_full_curves,
+                                            plot_object = ax)
+
+            if plot_object is None:
+                end_plot = True
+
+
+            size_legend = len(texts2)
+
+            patches1 = [ plt.plot([],  [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
+                    label="{:s}".format(texts1[i]))[0] for i in range(size_legend) ]
+
+            patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
+                    label="{:s}".format(texts2[i]))[0] for i in range(size_legend) ] 
+
+            pos1 = (1.01, 1)
+            pos2 = (1.01, 0)
+
+
+
+            if plot_object is not None:
+                patches1 = old_patches1 + patches1
+                patches2 = old_patches2 + patches2
+                texts1 = old_text1 + texts1
+                texts2 = old_text2 + texts2
+
+            vals_texts_1 = [ float(v.split(" : ")[1]) for v in texts1 ]
+            vals_texts_2 = [ float(v.split(" : ")[1]) for v in texts2 ]
+
+
+            #zipped1 = sorted(zip(vals_texts_1,texts1,patches1), reverse = False)
+            #zipped2 = sorted(zip(vals_texts_2,texts2,patches2), reverse = True)
+
+            #texts1 = [t[1] for t in zipped1]
+
+            #patches1 = [t[2] for t in zipped1]
+
+            #texts2 = [t[1] for t in zipped2]
+
+            #patches2 = [t[2] for t in zipped2]
+
+            if not cell_view:
+
+                plt.subplots_adjust(top=.9, bottom=.1, left=.075, right=.80)
+
+                """"
+                ax.legend( handles=patches1, bbox_to_anchor=pos1,   #remove from right axis
+                           loc="upper left", ncol=1, 
+                           facecolor="#d3d3d3", numpoints=1, 
+                           fontsize=13,frameon=False,
+                           title = "Average Distance" )
+                """
+
+
+                legend2 = Legend( ax, labels=texts2, handles=patches2, bbox_to_anchor=pos2,
+                                  loc="lower left", ncol=1, facecolor="#d3d3d3", 
+                                  numpoints=1, fontsize=13,frameon=False,
+                                  title = "# of Instances")
+
+                for art in ax.artists:
+                    art.remove()
+
+                #ax.add_artist(legend2)       #remove from right axis
+
+            elif cell_view and multi_clusters:
+
+                ax_object_count = 0
+                extra_space = False
+                no_axis = False
+
+                if grid_heigth!=grid_heigth_real:
+                    extra_space = True
+
+                for j in range(grid_width):
+                    for i in range(grid_heigth):
+
+                        ax_object = ax[i,j]
+                        ax_object_count+=1
+
+                        if n_clusters <= 15:
+
+                            if (ax_object_count > n_clusters and not extra_space) or (extra_space and (i > grid_width_real-1 or j > grid_width_real-1)):
+                                ax_object.axis("off")
+
+                            if (ax_object_count == n_clusters + 1 and not extra_space) or (extra_space and j == 0 and i == grid_heigth - 1):
+
+                                ax_object.legend( handles=patches1, bbox_to_anchor=(0,1), 
+                                    loc="upper left", ncol=1, 
+                                    facecolor="#d3d3d3", numpoints=1, 
+                                    fontsize=10,frameon=False,
+                                    title = "Average Distance" )
+
+
+                                legend2 = Legend( ax_object, labels=texts2, handles=patches2, bbox_to_anchor=(1,1),
+                                      loc="upper right", ncol=1, facecolor="#d3d3d3", 
+                                      numpoints=1, fontsize=10,frameon=False,
+                                      title = "# of Instances")
+
+                                for art in ax_object.artists:
+                                    art.remove()
+
+                                ax_object.add_artist(legend2)
+                        else:
+                            no_axis = True
+                            ax_object.axis("off")
+
+                class_focus = self.cls_fcs
+
+                title_all = 'pdp for class: '+class_focus.replace("\n"," ")
+                title_all = title_all + " - feature: "+fix
+
+                if no_axis:
+                    fig.subplots_adjust(wspace=0.05, hspace = 0.25, top=0.9,bottom=0.05,left=.05, right=.95)
+
+                else:
+                    if not extra_space:
+                        if n_clusters == 11:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.2,left=.05, right=.95)
+                        elif n_clusters > 11 and n_clusters < 15:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.08,left=.05, right=.95)
+                        elif n_clusters == 15:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.3,left=.05, right=.95)
+                        else:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.1,left=.05, right=.95)
+                    else:
+                        if n_clusters > 15:
+                            # 16 25 ...
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                        elif n_clusters >= 9 and n_clusters < 15:
+                            #9
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                        else:
+                            #4
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=-0.05,left=.05, right=.95)
+
+                fig.suptitle(title_all, fontsize=font_size_par)
+
+
+
+            # no sides
+            # plt.tight_layout()
+            # only right side
+            #plt.subplots_adjust(top=.9, bottom=.1, left=.05, right=.80)
+            # both sides
+
+
+            # only left side
+            #plt.subplots_adjust(top=.9, bottom=.1, left=.085, right=.99)
+            # does not work: ax.margins(y=0.05)
+
+
+
+            if end_plot:
+
+                if path is not None:
+                    if len(path) == 0 or type(path) is not str:
+                        path = "plot_" + fix + ".png"
+
+                    fig.savefig(path)
+                plt.show()
+                plt.close("all")
+    
+    
+    def plot3(self,
+             curves_input,
+             color_plot = None,
+             thresh = 0.5,
+             local_curves = False,
+             chosen_row_preds_to_plot = None,
+             plot_full_curves = False,
+             plot_object = None,
+             cell_view = False,
+             path = None,
+            font_size=12):
+
+
+
+            fix = self.the_feature
+            class_array = self.cls_arr
+            model = self.mdl
+            df_test = self.df
+
+
+            num_samples = self.n_smpl
+
+
+            data_set_pred_index = self.data_set_pred_index
+
+
+            def plotting_prediction_changes( single_curve_object, 
+                                            color_curve = "blue",
+                                            spag = False, 
+                                            pred_spag = None, 
+                                            chosen_row_preds = None, 
+                                            full_curves = False,
+                                            plot_object = None,
+                                            ticks_color = "black"):
+
+
+
+                dist_matrix = single_curve_object.get_dm()
+                pred_matrix = single_curve_object.get_preds()
+                rWarped = single_curve_object.get_keogh_radius()
+                indices_from_test = single_curve_object.get_ixs()
+
+                if plot_object is not None:
+                    ax = plot_object
+
+                else:
+                    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+
+
+
+
+
+                def b_spline(x,y):
+                    n_local_points = len(x)
+                    t = range(n_local_points)
+                    ipl_t = np.linspace(0.0, n_local_points - 1, 100)
+
+                    x_tup = si.splrep(t, x, k=3)
+                    y_tup = si.splrep(t, y, k=3)
+
+                    x_list = list(x_tup)
+                    xl = x.tolist()
+                    size_seros = len(x_list[1]) - len(xl)
+                    x_list[1] = xl + np.zeros(size_seros).tolist()
+
+                    y_list = list(y_tup)
+                    yl = y.tolist()
+                    size_seros = len(y_list[1]) - len(yl)
+                    y_list[1] = yl + np.zeros(size_seros).tolist()
+
+                    x_i = si.splev(ipl_t, x_list)
+                    y_i = si.splev(ipl_t, y_list)
+                    return x_i, y_i
+
+                dictLabtoIndex = self.dictLabtoIndex
+                original_preds = self.original_preds
+                changing_rows = self.changing_rows
+                df_sample = self.df_sample
+                df_features = self.df_features
+
+                trasparenza = 0.1
+                dot_size = 5
+
+                #cmap = plt.get_cmap("gist_rainbow")
+                #cmap = plt.get_cmap("RdYlBu")
+                # http://colorbrewer2.org/#type=qualitative&scheme=Paired&n=10
+
+                original_data_sample = self._back_to_the_original(list(df_sample[fix]), fix)
+
+                top_label = class_array[data_set_pred_index]
+                #t = time.time()
+                num_rows = len(pred_matrix)
+
+                if single_cluter and plot_object is None:
+                    ax.set_title("1D partial dependency of " + fix + " for cluster " + str(label_title_cluster), fontsize=font_size_par)    #setting title for the graph
+                elif cell_view and multi_clusters:
+                    if n_clusters <= 15:
+                        ax.set_title("Cluster " + str(label_title_cluster) + " - size: "+label2.split(" : ")[1], fontsize=font_size_par)    #setting title for the graph
+                    else:
+                        ax.set_title("")
+                #else:
+                    #ax.set_title("1D partial dependency of " + fix + " with " + top_label, fontsize=font_size_par) #setting title for the graph
+                    #ax.set_title(fix, fontsize=14)
+
+                if full_curves:
+                    for i in range(num_rows):
+                        ax.plot(original_data_sample,pred_matrix[i],color=color_curve,alpha=trasparenza)
+
+                if spag:                           #ploting the data points
+                    for j in indices_from_test:
+
+                        low_spag = originalIndex - howFarIndex
+                        high_spag = originalIndex + howFarIndex + 1
+
+                        NowSample =allSamplesOriginal[fix + "-o-" + str(j)][low_spag:high_spag]
+
+                        NowPreds = pred_spag[j, low_spag:high_spag]
+
+                        #plt.plot(NowSample,NowPreds,alpha=trasparenza,color=colors_10_cluster[i])
+                        x_i, y_i = b_spline(np.array(NowSample), np.array(NowPreds))
+                        ax.plot(x_i, y_i, alpha=0.8, color=ticks_color)
+
+                else:
+                    x_point = changing_rows[indices_from_test, dictLabtoIndex[fix]]
+                    x_point = self._back_to_the_original(x_point, fix)
+                    y_point = original_preds[indices_from_test]
+                    #ax.scatter(x_point, y_point, c=ticks_color, s=dot_size)    #ploting the data points
+
+                if not full_curves:
+                    mean_preds = np.array([ np.mean(pred_matrix[:, i]) for i in range(num_samples) ])
+                    std_preds = np.array([ np.std(pred_matrix[:, i]) for i in range(num_samples) ])
+                    #plt.plot(original_data_sample,mean_preds,color="red",alpha=1)
+                    #ax.fill_between(original_data_sample, mean_preds-std_preds, mean_preds+std_preds,color=color_curve,alpha=0.1)
+                    ax.fill_between(original_data_sample, mean_preds-0.0001, mean_preds+0.0001,color=color_curve,alpha=0.75)
+                    #print(original_data_sample)
+                    #print(repr(mean_preds))
+
+                if chosen_row_preds is not None:
+                    ax.plot(original_data_sample,chosen_row_preds,color="red",lw=2)   #plots the single vectors as red line
+
+                the_mean_value = self._back_to_the_original(df_features["mean"][fix], fix)
+                #if not cell_view:
+                    #ax.axvline(x=the_mean_value, color="green", linestyle='--')
+                    #ax.axhline(y=thresh, color="red", linestyle='--')
+                ax.set_ylabel("prediction", fontsize=font_size_par)
+
+                #ax.set_xlabel(fix, fontsize=font_size_par)
+                ax.set_xlim([original_data_sample[0], original_data_sample[num_samples-1]])
+                ax.set_ylim([0, 1])
+
+                if not cell_view:
+
+                    #pred = 1
+                    top_label = class_array[data_set_pred_index]
+
+                    #ax.text(-0.09, 0.95, top_label, fontsize=font_size_par, transform=ax.transAxes)  #right axis labels
+
+                    #pred = 0
+                    origin_label = class_array[1 - data_set_pred_index]
+
+                    if len(class_array) > 2:
+                        origin_label = "not "+top_label
+
+                    #ax.text(-0.09, 0.05, origin_label, fontsize=font_size_par, transform=ax.transAxes)  #right axis labels
+
+
+
+                else:
+                    if n_clusters > 15:
+
+                        ax.text(0.5,
+                                0.5,
+                                "#"+str(label_title_cluster).zfill(2),
+                                fontsize=font_size_par+10,
+                                transform=ax.transAxes, 
+                                ha = "center",
+                                va = "center",
+                                alpha = 0.25)
+
+
+
+            def pdp_local(fix, allSamples, chosen_row=None):
+
+
+                list_local_sampling = self.list_local_sampling
+
+                dictLabtoIndex = self.dictLabtoIndex
+                rows = self.changing_rows
+                num_feat = self.num_feat
+
+                num_rows = len(rows)
+                #print("changing up",num_rows,"rows")
+                new_matrix_f = np.zeros((num_rows, num_samples + 1, num_feat))
+                depth_index = 0
+                i = 0
+                for r in rows:
+                    sample_vals = list_local_sampling[i][fix]
+                    allSamples[fix + "-o-" + str(i)] = sample_vals
+                    #if float(i+1)%10000==0:
+                        #print ("---- loading matrix: ", np.round(i/float(num_rows),decimals=2)*100,"%")
+                        #print ("------ elapsed: ",int(int(time.time()-t)/60), "m")
+                    i+=1
+                    index_height = 0
+                    for v in sample_vals:
+                        new_r = np.copy(r)
+                        new_r[dictLabtoIndex[fix]] = v
+                        new_matrix_f[depth_index][index_height] = new_r
+                        index_height += 1
+                    depth_index += 1
+
+                if chosen_row is not None:
+                    chosen_row_alterations = []
+
+                    for v in sample_vals:
+                        arow = np.copy(chosen_row)
+                        arow[dictLabtoIndex[fix]] = v
+                        chosen_row_alterations.append(arow)
+
+                    return new_matrix_f, np.array(chosen_row_alterations), allSamples
+                return new_matrix_f, allSamples
+
+            def compute_pred_local(matrix_changed_rows, chosen_row_alterations=None):
+                num_feat = self.num_feat
+                data_set_pred_index = self.data_set_pred_index
+                numS = num_samples + 1
+                #t = time.time()
+                num_rows= len(matrix_changed_rows)
+                pred_matrix = np.zeros((num_rows, numS))
+                matrix_changed_rows = matrix_changed_rows.reshape((num_rows * numS, num_feat))
+                ps = model.predict_proba(matrix_changed_rows)
+                ps = [ x[data_set_pred_index] for x in ps ]
+                k = 0
+                for i in range(0, num_rows * numS):
+                    if i % numS ==0:
+                        pred_matrix[k] = ps[i:i + numS]
+                        k += 1
+                if chosen_row_alterations is not None:
+                    chosen_row_preds = model.predict_proba(chosen_row_alterations)
+                    chosen_row_preds = [ x[data_set_pred_index] for x in chosen_row_preds ]
+                    return pred_matrix, chosen_row_preds
+                return pred_matrix
+
+
+
+            ###########################
+            # WHERE THE MAGIC HAPPENS #
+            ###########################
+
+            font_size_par = font_size
+
+
+            single_cluter = False
+            n_clusters = None
+            multi_clusters = False
+
+            if type(curves_input) == tuple:
+                single_cluter = True
+                label_title_cluster = curves_input[0]
+                single_curve = curves_input[1]
+
+            if type(curves_input) == list:
+                multi_clusters = True
+                n_clusters = len(curves_input)
+
+            if not multi_clusters and not single_cluter:
+                single_curve = curves_input
+
+
+
+            if plot_object is None:
+                if cell_view and multi_clusters:
+
+                    grid_heigth = int(np.ceil(np.sqrt(n_clusters)))
+                    grid_width = int(np.ceil(n_clusters / grid_heigth))
+
+
+                    grid_heigth_real = grid_heigth
+                    grid_width_real = grid_width
+                    if grid_heigth*grid_width == n_clusters:
+
+                        grid_heigth = int(np.ceil(np.sqrt(n_clusters+1)))
+                        grid_width = int(np.ceil((n_clusters+1) / grid_heigth))
+
+
+                    col_plot_init = -1
+                    row_plot_init = 0
+
+                    fig, ax = plt.subplots(nrows=grid_heigth, ncols=grid_width, figsize=(16, 9), dpi=100)
+                else:
+                    fig, ax = plt.subplots(figsize=(16, 9), dpi=100)
+            else:
+                ax = plot_object
+                old_label = ax.get_legend_handles_labels()
+                handles = old_label[0]
+                labels = old_label[1]
+                old_text1 = labels[::2]
+                old_text2 = labels[1::2]
+                old_patches1 = handles[::2]
+                old_patches2 = handles[1::2]
+
+            preds_local = None
+
+            if local_curves:
+                originalIndex = int(num_samples / 2)
+                howFarIndex = int(np.ceil(2/100 * num_samples))
+                howFarIndex = max([2,howFarIndex])
+                allSamples = {}
+
+                the_matrix_local, allSamples = pdp_local(fix,allSamples)
+                preds_local = compute_pred_local(the_matrix_local)
+
+                allSamplesOriginal = {}
+                for key in allSamples:
+                    allSamplesOriginal[key] = self._back_to_the_original(allSamples[key], key.split("-o-")[0])
+
+
+            texts1 = []
+            texts2 = []
+            color_legend = []
+            end_plot = False
+            if multi_clusters:
+                if color_plot is None:
+                    color_plot_original = ['#1f78b4',
+                                           '#33a02c',
+                                           '#e31a1c',
+                                           '#ff7f00',
+                                           '#6a3d9a',
+                                           '#a6cee3',
+                                           '#b2df8a',
+                                           '#fb9a99',
+                                           '#fdbf6f',
+                                           '#cab2d6']
+
+                    if len(color_plot_original) < n_clusters:
+                        color_plot = []
+                        i_color = 0
+                        for i in range(n_clusters):
+                            color_plot.append(color_plot_original[i_color])
+                            i_color+=1
+                            if i_color == len(color_plot_original) - 1:
+                                i_color = 0
+                    else:
+                        color_plot = color_plot_original
+
+
+                for i in range(n_clusters):
+
+
+                    single_curve = curves_input[i][1]
+                    label_title_cluster = curves_input[i][0]
+
+                    dist_matrix_this = single_curve.get_dm()
+                    sizeClust = len(single_curve.get_ixs())
+                    if sizeClust == 1:
+                        avgRmse = 0
+                    else:
+                        avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
+
+                    label1 = " : " + str(avgRmse)
+                    label2 = " : " + str(sizeClust)
+
+                    texts1.append("Clust. " + str(label_title_cluster) + label1)
+                    texts2.append("Clust. " + str(label_title_cluster) + label2)
+                    color_legend.append(color_plot[i])
+
+                    if cell_view:
+                        font_size_par = 15
+
+                        if i /  grid_heigth_real < col_plot_init + 1:
+                            #print("same_row:",i /  grid_heigth,"<",col_plot_init + 1)
+                            col_plot = col_plot_init 
+                            row_plot = row_plot_init + 1
+                        else:
+                            col_plot = col_plot_init + 1
+                            row_plot = 0
+                        #print("r:",col_plot,"- c:",row_plot)
+                        axes_plot = ax[row_plot,col_plot]
+
+                        col_plot_init = col_plot
+                        row_plot_init = row_plot
+
+                    else:
+                        axes_plot = ax                    
+
+                    plotting_prediction_changes(
+                                single_curve_object = single_curve, 
+                                color_curve = color_plot[i],
+                                ticks_color = color_plot[i],
+                                spag = local_curves, 
+                                pred_spag = preds_local, 
+                                chosen_row_preds = chosen_row_preds_to_plot, 
+                                full_curves = plot_full_curves,
+                                plot_object = axes_plot)
+
+                    if cell_view:
+
+                        if col_plot_init != 0:
+                                axes_plot.set_ylabel("")
+                                axes_plot.yaxis.set_ticklabels([])
+
+                        if row_plot_init != grid_heigth_real-1 and i != n_clusters-1:
+                                axes_plot.set_xlabel("")
+                                axes_plot.xaxis.set_ticklabels([])
+
+
+            else:
+                if color_plot is None:
+                    color_plot = "blue"
+                    ticks_color = "black"
+                else:
+                    ticks_color = color_plot
+
+                dist_matrix_this = single_curve.get_dm()
+                sizeClust = len(single_curve.get_ixs())
+
+
+
+                if sizeClust == 1 or dist_matrix_this is None:
+                    avgRmse = 0
+
+                else:
+                    avgRmse = np.round(sum(sum(dist_matrix_this))/((sizeClust-1)*sizeClust),decimals=2)
+
+                if single_cluter:
+                    string_legend = "Clust. " + str(label_title_cluster) + " : "
+                else:
+                    string_legend = " : "
+
+                label1 = string_legend + str(avgRmse)
+                label2 = string_legend + str(sizeClust)
+
+                texts1.append(label1)
+                texts2.append(label2)
+
+                color_legend.append(color_plot)
+
+                plotting_prediction_changes(single_curve_object = single_curve, 
+                                            color_curve = color_plot,
+                                            ticks_color = ticks_color,
+                                            spag = local_curves, 
+                                            pred_spag = preds_local, 
+                                            chosen_row_preds = chosen_row_preds_to_plot, 
+                                            full_curves = plot_full_curves,
+                                            plot_object = ax)
+
+            if plot_object is None:
+                end_plot = True
+
+
+            size_legend = len(texts2)
+
+            patches1 = [ plt.plot([],  [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
+                    label="{:s}".format(texts1[i]))[0] for i in range(size_legend) ]
+
+            patches2 = [ plt.plot([], [], marker="o", ms=10, ls="", mec=None, color=color_legend[i], 
+                    label="{:s}".format(texts2[i]))[0] for i in range(size_legend) ] 
+
+            pos1 = (1.01, 1)
+            pos2 = (1.01, 0)
+
+
+
+            if plot_object is not None:
+                patches1 = old_patches1 + patches1
+                patches2 = old_patches2 + patches2
+                texts1 = old_text1 + texts1
+                texts2 = old_text2 + texts2
+
+            vals_texts_1 = [ float(v.split(" : ")[1]) for v in texts1 ]
+            vals_texts_2 = [ float(v.split(" : ")[1]) for v in texts2 ]
+
+
+            #zipped1 = sorted(zip(vals_texts_1,texts1,patches1), reverse = False)
+            #zipped2 = sorted(zip(vals_texts_2,texts2,patches2), reverse = True)
+
+            #texts1 = [t[1] for t in zipped1]
+
+            #patches1 = [t[2] for t in zipped1]
+
+            #texts2 = [t[1] for t in zipped2]
+
+            #patches2 = [t[2] for t in zipped2]
+
+            if not cell_view:
+
+                plt.subplots_adjust(top=.9, bottom=.1, left=.075, right=.80)
+
+                """"
+                ax.legend( handles=patches1, bbox_to_anchor=pos1,   #remove from right axis
+                           loc="upper left", ncol=1, 
+                           facecolor="#d3d3d3", numpoints=1, 
+                           fontsize=13,frameon=False,
+                           title = "Average Distance" )
+                """
+
+
+                legend2 = Legend( ax, labels=texts2, handles=patches2, bbox_to_anchor=pos2,
+                                  loc="lower left", ncol=1, facecolor="#d3d3d3", 
+                                  numpoints=1, fontsize=13,frameon=False,
+                                  title = "# of Instances")
+
+                for art in ax.artists:
+                    art.remove()
+
+                #ax.add_artist(legend2)       #remove from right axis
+
+            elif cell_view and multi_clusters:
+
+                ax_object_count = 0
+                extra_space = False
+                no_axis = False
+
+                if grid_heigth!=grid_heigth_real:
+                    extra_space = True
+
+                for j in range(grid_width):
+                    for i in range(grid_heigth):
+
+                        ax_object = ax[i,j]
+                        ax_object_count+=1
+
+                        if n_clusters <= 15:
+
+                            if (ax_object_count > n_clusters and not extra_space) or (extra_space and (i > grid_width_real-1 or j > grid_width_real-1)):
+                                ax_object.axis("off")
+
+                            if (ax_object_count == n_clusters + 1 and not extra_space) or (extra_space and j == 0 and i == grid_heigth - 1):
+
+                                ax_object.legend( handles=patches1, bbox_to_anchor=(0,1), 
+                                    loc="upper left", ncol=1, 
+                                    facecolor="#d3d3d3", numpoints=1, 
+                                    fontsize=10,frameon=False,
+                                    title = "Average Distance" )
+
+
+                                legend2 = Legend( ax_object, labels=texts2, handles=patches2, bbox_to_anchor=(1,1),
+                                      loc="upper right", ncol=1, facecolor="#d3d3d3", 
+                                      numpoints=1, fontsize=10,frameon=False,
+                                      title = "# of Instances")
+
+                                for art in ax_object.artists:
+                                    art.remove()
+
+                                ax_object.add_artist(legend2)
+                        else:
+                            no_axis = True
+                            ax_object.axis("off")
+
+                class_focus = self.cls_fcs
+
+                title_all = 'pdp for class: '+class_focus.replace("\n"," ")
+                title_all = title_all + " - feature: "+fix
+
+                if no_axis:
+                    fig.subplots_adjust(wspace=0.05, hspace = 0.25, top=0.9,bottom=0.05,left=.05, right=.95)
+
+                else:
+                    if not extra_space:
+                        if n_clusters == 11:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.2,left=.05, right=.95)
+                        elif n_clusters > 11 and n_clusters < 15:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.08,left=.05, right=.95)
+                        elif n_clusters == 15:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.3,left=.05, right=.95)
+                        else:
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.1,left=.05, right=.95)
+                    else:
+                        if n_clusters > 15:
+                            # 16 25 ...
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                        elif n_clusters >= 9 and n_clusters < 15:
+                            #9
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=0.12,left=.05, right=.95)
+                        else:
+                            #4
+                            fig.subplots_adjust(wspace=0.05, hspace = 0.5, top=0.9,bottom=-0.05,left=.05, right=.95)
+
+                fig.suptitle(title_all, fontsize=font_size_par)
+
+
+
+            # no sides
+            # plt.tight_layout()
+            # only right side
+            #plt.subplots_adjust(top=.9, bottom=.1, left=.05, right=.80)
+            # both sides
+
+
+            # only left side
+            #plt.subplots_adjust(top=.9, bottom=.1, left=.085, right=.99)
+            # does not work: ax.margins(y=0.05)
+
+
+
+            if end_plot:
+
+                if path is not None:
+                    if len(path) == 0 or type(path) is not str:
+                        path = "plot_" + fix + ".png"
+
+                    fig.savefig(path)
+                plt.show()
+                plt.close("all")
+            
+    
+    def plot_multiple(self, columns, local_curves=False, plot_full_curves=False, path=None, rug=False, data=None, compute_clusters=False, n_clusters=None):
+        
+        
+        """
+        The visualization help to visualize multiple variables at a time. The variables can either be viewed as broad curves or as clusters with different color. The plots are ranked according of the variance in the prediction for a single board curve or a cluster of curves for a variables, where the variable with the highest variance is plotted first and so on.        
+
+        Parameters
+        ----------
+        
+        columns : list of strings
+            (REQUIRED) List of column names to be plotted.
+
+        local_curves: boolean value
+            (OPTIONAL) [default = True] If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
+
+        plot_full_curves: boolean value
+            (OPTIONAL) [default = False]
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically computed.
+            
+        rug : boolean value
+            (OPTIONAL) [default = False] Displays a rug plot at the bottom of each plot showing the distribution for a variable.
+            
+        data: pandas.DataFrame
+            (OPTIONAL) dataframe containing only the features values for each instance in the test-set. Only needed when the rugplot needs to be drawn
+            
+        compute_clusters : boolean value
+            (OPTIONAL) Parameter to specify if clusters must be computed for each of the variables for the partial dependence plot.
+            
+        n_clusters : integer value
+            (OPTIONAL) Number of clusters to be computer for each of the variables.
+            
+
+        """
+        
+        def upper_rugplot(data, height=.04, ax=None, **kwargs):
+            ax.plot(data, [0.01]*len(data), '|', color='#5b5b5c', markersize=10, mew=1.5)
+
+        def compute_rank_of_column(pdp, column_list):
+
+            def get_slope(pdp, curves):
+
+                fix = pdp.the_feature
+                df_sample = pdp.df_sample
+                original_data_sample = pdp._back_to_the_original(list(df_sample[fix]), fix)
+                A = np.array(original_data_sample)
+
+                def normalize(v):
+                    norm = np.linalg.norm(v)
+                    if norm == 0: 
+                        return v
+                    return v / norm
+
+                A = normalize(A)
+
+                px = curves.get_preds()
+                mpd = np.array([ np.mean(px[:, i]) for i in range(pdp.n_smpl)])
+                B = np.array(mpd)
+
+                #at = A - A.mean()
+                #bt = B - B.mean()
+                #slope = round((at.dot(bt)/at.dot(at)), 6)
+
+
+                return abs(B.max()-B.min())
+
+
+
+            slopes_dict = {}
+            for c in column_list:
+                curves = pdp.pdp(c)
+                slopes_dict[c] = get_slope(pdp, curves)
+
+            import operator
+            slopes_sorted = sorted(slopes_dict.items(), key=operator.itemgetter(1), reverse=True)
+
+            list_of_columns = []
+            for rs in slopes_sorted:
+                list_of_columns.append(rs[0])
+
+            return list_of_columns
+
+        def compute_rank_of_column_clustered(pdp, column_list, n_clusters):
+
+            def get_list_of_slopes(pdp, curves_list):
+                list_of_slopes = []
+                fix = pdp.the_feature
+                df_sample = pdp.df_sample
+                original_data_sample = pdp._back_to_the_original(list(df_sample[fix]), fix)
+                A = np.array(original_data_sample)
+
+                def normalize(v):
+                    norm = np.linalg.norm(v)
+                    if norm == 0: 
+                        return v
+                    return v / norm
+
+                A = normalize(A)
+
+
+                list1 = []
+                for cu in curves_list:
+                    px = cu[1].get_preds()
+                    mpd = np.array([ np.mean(px[:, i]) for i in range(pdp.n_smpl) ])
+                    B = np.array(mpd)
+                    #Bu = np.unique(B)
+                    #Bp = np.pad(Bu, (0, 100-len(Bu)), 'constant')
+                    list1.append(B.max()-B.min())
+                    #at = A - A.mean()
+                    #bt = B - B.mean()
+                    #slope = round((at.dot(bt)/at.dot(at)), 6)
+                    #list_of_slopes.append(slope)
+
+                #from itertools import combinations
+                #from numpy import dot
+                #from numpy.linalg import norm
+
+                #for ele in combinations(list1, 2):
+                    #list_of_slopes.append(dot(ele[0], ele[1])/(norm(ele[0])*norm(ele[1])))
+
+                return list1
+
+            def get_slope_rank(l):
+                #sl = [j-i for i, j in zip(l[:-1], l[1:])]
+                return sum(l)
+
+            rank_dict = {}
+            slopes_dict = {}
+            for c in column_list:
+                curves = pdp.pdp(c)
+                curves_list = pdp.compute_clusters(curves,n_clusters)
+                slopes_list = get_list_of_slopes(pdp, curves_list)
+                rank_dict[c] = get_slope_rank(slopes_list)
+                slopes_dict[c] = slopes_list
+
+            import operator
+            rank_sorted = sorted(rank_dict.items(), key=operator.itemgetter(1), reverse=True)
+
+            list_of_columns = []
+            for rs in rank_sorted:
+                list_of_columns.append(rs[0])
+
+            return list_of_columns
+
+        if compute_clusters:
+            columns = compute_rank_of_column_clustered(self, columns, n_clusters)
+        else:
+            columns = compute_rank_of_column(self, columns)
+            
+        if rug==True and not isinstance(data, pd.DataFrame):
+            warnings.warn('Data needs to be provided for rug plot')
+
+        n = math.ceil(len(columns)/4)
+        dpi = 110
+        if len(columns) < 4:
+            dpi = 110
+        fig, ax = plt.subplots(n,4, figsize=(16, 3*n), dpi=dpi)
+        fig.subplots_adjust(hspace=.30)
+        fig.subplots_adjust(wspace=.26)
+        for i, c in enumerate(columns):
+            curves = self.pdp(columns[i])
+            if compute_clusters:
+                curves_clusters = self.compute_clusters(curves, n_clusters)
+            x = math.trunc(i/4)
+            y = i%4
+            if len(columns) <= 4:
+                a = ax[y]
+                a.spines['right'].set_color('#565759')
+                a.spines['left'].set_color('#565759')
+                a.spines['bottom'].set_color('#565759')
+                a.spines['top'].set_color('#565759')
+                a.set_title(c)
+            else:
+                a = ax[x, y]
+                a.spines['right'].set_color('#565759')
+                a.spines['left'].set_color('#565759')
+                a.spines['bottom'].set_color('#565759')
+                a.spines['top'].set_color('#565759')
+                a.set_title(c)
+            if rug == True:
+                if data is not None:
+                    upper_rugplot(data[c], ax=a)
+            try:
+                if compute_clusters:
+                    self.plot2(curves_clusters, local_curves=local_curves, plot_full_curves=plot_full_curves, plot_object=a,
+                            path=path)
+                else:
+                    self.plot2(curves,local_curves = local_curves, plot_full_curves = plot_full_curves, plot_object=a, 
+                             path=path)
+            except:
+                continue
+        if len(columns)%4 == 1:
+            fig.delaxes(ax.flatten()[len(columns)+1])
+            fig.delaxes(ax.flatten()[len(columns)+2])
+            fig.delaxes(ax.flatten()[len(columns)])
+        if len(columns)%4 == 2:
+            fig.delaxes(ax.flatten()[len(columns)+1])
+            fig.delaxes(ax.flatten()[len(columns)])
+        if len(columns)%4 == 3:
+            fig.delaxes(ax.flatten()[len(columns)])
+        x_title = 0.42
+        y_title = 0.98
+        if len(columns) <= 4:
+            y_title = 1.08
+        if len(columns) < 4:
+            x_title = 0.3
+        #plt.suptitle('1D Partial Dependence plots', x=x_title, y=y_title, fontsize=12)
+        plt.show()
+       
+    
+    
+    @staticmethod
+    def plot_binning(xtest, column_bin, model, class_labels, class_label, n_bins=4, top_k=5):
+        
+        """
+        The visualization bins one particular variable into a specified number of bins and then draws plots for each of the remaining variables. Every bin as one line per plot. The remaining variables are ranked according to the combined variance of all the lines of the bins and the variable with the maximum variance is plotted first and so on. A different colors is given to each bin. The visualization also displays the histogram for the binned variable. This method should be called without a pdp object.    
+
+        Parameters
+        ----------
+        
+        xtest: pandas.DataFrame
+            (REQUIRED) dataframe containing only the features values for each instance in the test-set. 
+            
+        column_bin : string
+            (REQUIRED) Column on which binning needs to be performed.
+
+        n_bins: integer value
+            (REQUIRED) [default = 4] The number of bins the binning variable must be divided into.
+
+        model: Python object
+            (REQUIRED) Trained classifier as an object with the following properties:
+            The object must have a method predict_proba(X) 
+            which takes a numpy.array of shape (n, num_feat) 
+            as input and returns a numpy.array of shape (n, len(class_array)).
+
+        class_labels: list of strings
+            (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+        class_label: string
+            (REQUIRED) class name of the desired partial dependence.
+            
+        top_k: integer value
+            (OPTIONAL) [deafult = 5] The number of variables to be visualized.
+            
+        """
+        
+        if n_bins < 2:
+            warnings.warn('Number of bins should be greater than 1')
+            return
+
+        if top_k > len(xtest.columns) - 1:
+            warnings.warn('The number of plots at maximum, should be one less than the number of columns in the dataset')
+            return
+        
+        if top_k < 1:
+            warnings.warn('The number of plots must be greater than 0')
+            return
+        
+        
+        def get_slope(pdp, curves):
+            px = curves.get_preds()
+            mpd = np.array([ np.mean(px[:, i]) for i in range(pdp.n_smpl)])
+            B = np.array(mpd)
+            return B.max()-B.min()
+
+        def get_slope_rank(l):
+            #sl = [j-i for i, j in zip(l[:-1], l[1:])]
+            return sum(l)
+        
+        xt = xtest.copy()
+    
+        xt['_c0'] = pd.cut(xt[column_bin], bins=n_bins, labels=[x for x in range(n_bins)])
+
+        original_columns_list = list(xtest.columns)
+
+        multi_ranking_total = {}
+        multi_ranking_columns = {}
+        for column in original_columns_list:
+            pdp_holder = []
+            slope_holder = []
+            for i in range(n_bins):
+                xt_temp = xt[xt['_c0'] == i].copy()
+                xt_temp = xt_temp[original_columns_list]
+                pdp_t = PartialDependence(xt_temp, model, class_labels, class_label)
+                curves_t = pdp_t.pdp(column)
+                slope_holder.append(get_slope(pdp_t, curves_t))
+                pdp_holder.append(pdp_t)
+
+            #slopes_interaction = []
+            #from itertools import combinations
+            #from numpy import dot
+            #from numpy.linalg import norm
+
+            #for ele in combinations(slope_holder, 2):
+                    #slopes_interaction.append(dot(ele[0], ele[1])/(norm(ele[0])*norm(ele[1])))
+
+            final_slope = get_slope_rank(slope_holder)
+
+            multi_ranking_columns[column] = final_slope
+            multi_ranking_total[column] = [pdp_holder, final_slope]
+
+        import operator
+        multi_ranking_columns_sorted = sorted(multi_ranking_columns.items(), key=(operator.itemgetter(1)), reverse=True)
+
+        #total = 0
+        #for mrss in multi_ranking_columns_sorted:
+           #total = total + mrss[1]
+            #print(mrss)
+        #print(total)
+
+        columns_list = []
+        for mrss in multi_ranking_columns_sorted[:top_k+1]:
+            columns_list.append(mrss[0])
+
+        if column_bin in columns_list:
+            columns_list.remove(column_bin)
+        else:
+            columns_list.pop()
+
+        n = math.ceil(len(columns_list)/4)
+        dpi = 100
+        if top_k < 4:
+            dpi=100
+        fig, ax = plt.subplots(n,4, figsize=(16, 3*n), dpi=dpi)
+        fig.subplots_adjust(hspace=.30)
+        fig.subplots_adjust(wspace=.26)
+        color_plot_original = ['#1f78b4',
+                                           '#33a02c',
+                                           '#e31a1c',
+                                           '#ff7f00',
+                                           '#6a3d9a',
+                                           '#a6cee3',
+                                           '#b2df8a',
+                                           '#fb9a99',
+                                           '#fdbf6f',
+                                           '#cab2d6']
+
+        for i, c in enumerate(columns_list):
+            x = math.trunc(i/4)
+            y = i%4
+            if len(columns_list) <= 4:
+                a = ax[y]
+                a.spines['right'].set_color('#565759')
+                a.spines['left'].set_color('#565759')
+                a.spines['bottom'].set_color('#565759')
+                a.spines['top'].set_color('#565759')
+                a.set_title(c)
+            else:
+                a = ax[x, y]
+                a.spines['right'].set_color('#565759')
+                a.spines['left'].set_color('#565759')
+                a.spines['bottom'].set_color('#565759')
+                a.spines['top'].set_color('#565759')
+                a.set_title(c)
+            pdp_list = multi_ranking_total[c][0]
+            color_counter = 0
+            for pdp in pdp_list:
+                curves = pdp.pdp(c)
+                try:
+                    pdp.plot3(curves, local_curves=False, plot_object=a, color_plot=color_plot_original[color_counter])
+                except:
+                    continue
+                if color_counter == len(color_plot_original):
+                    color_counter = 0
+                else:
+                    color_counter = color_counter + 1
+        if len(columns_list)%4 == 1:
+            fig.delaxes(ax.flatten()[len(columns_list)+1])
+            fig.delaxes(ax.flatten()[len(columns_list)+2])
+            fig.delaxes(ax.flatten()[len(columns_list)])
+        if len(columns_list)%4 == 2:
+            fig.delaxes(ax.flatten()[len(columns_list)+1])
+            fig.delaxes(ax.flatten()[len(columns_list)])
+        if len(columns_list)%4 == 3:
+            fig.delaxes(ax.flatten()[len(columns_list)])
+        y_title = 0.98
+        x_title = 0.43
+        if n == 1:
+            y_title=1.08
+        if top_k < 4:
+            x_title = 0.2   
+        plt.suptitle('1D partial dependence plot for binning on \'{0}\''.format(column_bin), x=x_title, y=y_title, fontsize=14)
+        plt.show()
+        fig, ax = plt.subplots(1,1, figsize=(16,0.5), dpi=100)
+        patches1 = [ plt.plot([],  [], marker="o", ms=10, ls="", mec=None, color=color_plot_original[i], 
+                    label="{0} - {1}".format(xt[xt['_c0'] == i][column_bin].min(), xt[xt['_c0'] == i][column_bin].max()))[0] for i in range(n_bins) ]
+        fig.legend(handles=patches1, loc='upper center', ncol=n_bins, numpoints=1, 
+                  title='Bins of \'{0}\''.format(column_bin), fontsize=12)
+        #fig.delaxes(ax)
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.set_yticks([])
+        ax.set_xticks([])
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        plt.show()
+        fig, ax = plt.subplots(1,1, figsize=(4,3), dpi=100)
+        plt.title('Histogram for {0}'.format(column_bin))
+        ax.spines['right'].set_color('#565759')
+        ax.spines['left'].set_color('#565759')
+        ax.spines['bottom'].set_color('#565759')
+        ax.spines['top'].set_color('#565759')
+        plt.hist(xt[column_bin], bins=n_bins, edgecolor='black', linewidth='0.8')
+        plt.show()
+    
+    
+    
+    @staticmethod
+    def get_rank_on_binning(xtest, model, class_labels, class_label, n_bins=3):
+        
+        """
+        This method provides a list of variables ordered by the variance they will have if they are binned for a particular number of bins. This method first bins the a variable in specified number of bins and then calculates the total variance for that variable and orders all the variables based on the total variable of each from maximum to minimum.    
+
+        Parameters
+        ----------
+        
+        xtest: pandas.DataFrame
+            (REQUIRED) dataframe containing only the features values for each instance in the test-set. 
+
+        n_bins: integer value
+            (REQUIRED) [default = 3] The number of bins the binning variable must be divided into.
+
+        model: Python object
+            (REQUIRED) Trained classifier as an object with the following properties:
+            The object must have a method predict_proba(X) 
+            which takes a numpy.array of shape (n, num_feat) 
+            as input and returns a numpy.array of shape (n, len(class_array)).
+
+        class_labels: list of strings
+            (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+        class_label: string
+            (REQUIRED) class name of the desired partial dependence.
+            
+        """
+        
+        def get_slope(pdp, curves):
+            px = curves.get_preds()
+            mpd = np.array([ np.mean(px[:, i]) for i in range(pdp.n_smpl)])
+            B = np.array(mpd)
+            return B.max()-B.min()
+    
+        if n_bins < 2:
+            warnings.warn('Number of bins should be greater than 1')
+            return
+
+        bin_ranking_columns = {}
+        for column_bin in list(xtest.columns):
+
+            xt = xtest.copy()
+
+            xt['_c0'] = pd.cut(xt[column_bin], bins=n_bins, labels=[x for x in range(n_bins)])
+
+            original_columns_list = list(xtest.columns)
+
+            multi_ranking_columns = []
+
+            for column in original_columns_list:
+                slope_holder = []
+                for i in range(n_bins):
+                    xt_temp = xt[xt['_c0'] == i].copy()
+                    xt_temp = xt_temp[original_columns_list]
+                    pdp_t = PartialDependence(xt_temp, model, class_labels, class_label)
+                    curves_t = pdp_t.pdp(column)
+                    slope_holder.append(get_slope(pdp_t, curves_t))
+
+                final_slope = sum(slope_holder)
+                #print(final_slope)
+
+                multi_ranking_columns.append(final_slope)
+
+            bin_ranking_columns[column_bin] = sum(multi_ranking_columns)
+
+        import operator
+        bin_ranking_columns_sorted = sorted(bin_ranking_columns.items(), key=(operator.itemgetter(1)), reverse=True)
+
+        print('The order of columns for {0} bins according to variance in the plots'.format(n_bins))
+        columns_list = []
+        for brcs in bin_ranking_columns_sorted:
+            print(brcs[0])
+            columns_list.append(brcs[0])
+
+        return columns_list

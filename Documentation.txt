@@ -1,0 +1,368 @@
+    
+class partial_dependence.PartialDependence
+
+    Initialization Parameters
+    -------------------------
+    
+    df_test: pandas.DataFrame
+        (REQUIRED) dataframe containing only the features values for each instance in the test-set.
+
+    model: Python object
+        (REQUIRED) Trained classifier as an object with the following properties:
+        The object must have a method predict_proba(X) 
+        which takes a numpy.array of shape (n, num_feat) 
+        as input and returns a numpy.array of shape (n, len(class_array)).
+
+    class_array: list of strings
+        (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+    class_focus: string
+        (REQUIRED) class name of the desired partial dependence
+
+    num_samples: integer value
+        (OPTIONAL)[default = 100] number of desired samples. Sampling a feature is done with:
+            numpy.linspace(min_value,max_value,num_samples)
+        where the bounds are related to min and max value for that feature in the test-set.
+
+    scale: float value
+        (OPTIONAL)[default = None] scale parameter vector for normalization.
+
+    shift: float value
+        (OPTIONAL)[default = None] shift parameter vector for normalization.
+        
+            If you need to provide your data to the model in normalized form, 
+            you have to define scale and shift such that:
+                transformed_data = (original_data + shift)*scale
+            where shift and scale are both numpy.array of shape (1,num_feat).
+            If the model uses directly the raw data in df_test without any transformation, 
+            do not insert any scale and shift parameters.
+            
+            
+    Methods
+    -------
+    
+    pdp(self, fix, chosen_row=None,batch_size=0)
+    
+        By choosing a feature and changing it in the sample range, 
+        for each row in the test-set we can create num_samples different versions of the original instance.
+        Then we are able to compute prediction values for each of the different vectors.
+        pdp() initialize and returns a python object from the class PdpCurves containing such predictions values.
+
+        Parameters
+        ----------
+
+        fix : string
+            (REQUIRED) The name of feature as reported in one of the df_test columns.
+       
+        chosen_row : numpy.array of shape (1,num_feat)
+            (OPTIONAL) [default = None] A custom row, defined by the user, used to test or compare the results.
+            For example you could insert a row with mean values in each feature.
+
+        batch_size: integer value
+            (OPTIONAL) [default = 0] The batch size is required when the size ( num_rows X num_samples X num_feat ) becomes too large.
+            In this case you might want to compute the predictions in chunks of size batch_size, to not run out of memory.
+            If batch_size = 0, then predictions are computed with a single call of model.predict_proba().
+            Otherwise the number of calls is automatically computed and it will depend on the user-defined batch_size parameter.
+            In order to not split up predictions relative to a same instance in different chunks, 
+            batch_size must be greater or equale to num_samples.
+
+        Returns
+        -------
+
+        curves_returned: python object
+            (ALWAYS) An itialized object from the class PdpCurves.
+            It contains all the predictions obtained from the different versions of the test instances, stored in matrix_changed_rows.
+
+        chosen_row_preds: numpy.array of shape (1, num_samples)
+            (IF REQUESTED) If chosen_row_alterations was supplied by the user, we also return this array, otherwise just pred_matrix is returned.
+            It contains all the different predictions obtained from the different versions of custom chosen_row, stored in chosen_row_alterations. 
+            
+            
+    get_optimal_keogh_radius(self)
+    
+            computes the optimal value for the parameter needed to compute the LB Keogh distance.
+            It is computed given the sample values, the standard deviation, max and min.
+            
+            
+    compute_clusters(self, curves, n_clusters=5)
+    
+        Produces a clustering on the instances of the test set based on the similrity of the predictions values from preds.
+        The clustering is done with the agglomerative technique using a distance matrix.
+        The distance is measured either with root mean square error (RMSE) or with dynamic time warping distance (DTW),
+        depending on the user choice.
+
+        Parameters
+        ----------
+        curves : python object
+            (REQUIRED) Returned by previous function pdp() or pdp_2D() or get_data_splom().
+
+        n_clusters : integer value
+            (OPTIONAL) [default = 5] The number of desired clusters.
+
+        Returns
+        -------
+
+        the_list_sorted : list of size n_clusters with tuples: ( label cluster (float), python object OR dictionary of python objects (SPLOM data) )
+            (ALWAYS) Each element is an object from the class PdpCurves() or Pdp2DCurves() representing a different cluster.
+            This list is sorted using the clustering distance matrix taking the biggest cluster first, 
+            then the closest cluster by average distance next and so on.
+            
+    plot(self, curves_input, color_plot = None, thresh = 0.5, local_curves = True, chosen_row_preds_to_plot = None, plot_full_curves = False, plot_object = None, cell_view = False, path = None)
+    
+        The visualization will display broad curves with color linked to different clusters.
+        The orginal instances are displayed with coordinates (orginal feature value, original prediction) either as
+        local curves or dots depending on the local_curves argument value.
+
+        Parameters
+        ----------
+        
+        curves : python object
+            (REQUIRED) A python object from the class PdpCurves(). ( Returned by previous function pdp() )
+            Otherwise a list of such python objects in tuples. ( Returned by previous function compute_clusters() )
+
+        color_plot : string or list of strings
+            (OPTIONAL) [default = None] The color for each cluster of instances. 
+            If there is no clustering or just a single cluster provide just a string with the desire color.
+
+        thresh: float value
+            (OPTIONAL) [default = 0.5]  The threshold is displayed as a red dashed line parallel to the x-axis.
+
+        local_curves: boolean value
+            (OPTIONAL) [default = True] If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
+
+        chosen_row_preds_to_plot: numpy.array of shape (1, num_samples)
+            (OPTIONAL) [default = None] Returned by previous function pdp().
+            Such values will be displayed as red curve in the plot.
+
+        plot_full_curves: boolean value
+            (OPTIONAL) [default = False]
+
+        plot_object: matplotlib axes object
+            (OPTIONAL) [default = None] In case the user wants to pass along his own matplotlib figure to update.
+            This garantees all the possible customization.
+
+        cell_view: boolean value
+            (OPTIONAL) [default = False] It displays clusters in different cells. 
+            If a list of clusters is not provided this argument is ignored.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically computed.
+
+    pdp_2D(self, A, B, instances = None, sample_data = None, zoom_on_mean = False)
+    
+        By choosing two features and changing them in two sample ranges, 
+        for each provided instance we can create num_samples X num_samples different versions of the original instance.
+        Then we are able to compute prediction values for each of the different vectors.
+        pdp_2D() initialize and returns a python object from the class Pdp2DCurves() containing such predictions values. 
+
+        Parameters
+        ----------
+
+        A : string
+            (REQUIRED) The name of a feature as reported in one of the df_test columns.
+
+        B : string
+            (REQUIRED) The name of another feature as reported in one of the df_test columns.
+       
+        instances : list of integers OR single integer value
+            (OPTIONAL) [default = None] If provided, it needs to contain the indexes of the test-set chosen instances.
+            If None all indexes in test set are used. (range(lenTest))
+
+        sample_data: tuple (list for sample A, list for sample B)
+            (OPTIONAL) [default = None] The sample values for feature A and feature B can be provided as arguments here.
+            If not provided they will be automatically computed with the private funct. _local_sampling_mult() depending on zoom_on_mean.
+
+        zoom_on_mean: boolean
+            (OPTIONAL) [default = False] If sample_data is not None, then this argument is ignored.
+            Otherwise:   if True sampling is around the value (mean value feature A, mean value feature B) of the set of instances.
+                         if False sampling goes from min to max of the two feature values, 
+                         therefore all outliers will be part of the sample ranges.
+
+        Returns
+        -------
+
+        heatmap_curves: python object
+            (ALWAYS) An itialized object from the class Pdp2DCurves.
+            It contains all the predictions obtained from the different versions of the instances,
+            along with other useful information to keep store for later steps.
+
+    plot_heatmap( self, curves_objs, path = None, for_splom = False, plot_object = None)
+    
+        This function is able to plot heatmaps from python objects of the class Pdp2DCurves().
+
+        Parameters
+        ----------
+
+        curves_objs : python object
+            (REQUIRED) A python object from the class Pdp2DCurves(). ( Returned by previous function pdp_2D() )
+           Otherwise a list of such python objects in tuples. ( Returned by previous function compute_clusters() )
+           In the latter case the visualization will have an heatmap for each cluster in the list.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically generated.
+
+        for_splom: boolean
+            (OPTIONAL) [default = False] This function is later used to generate the cell heatmaps in a SPLOM visualization.
+            This flag is passed True when such call is needed. In all other cases this flag is False.
+        
+        plot_object: matplotlib axes object
+            (OPTIONAL) [default = None] In case the user wants to pass along his own matplotlib figure to update.
+            This garantees all the possible customization.
+
+    get_data_splom(self, instances_input = None, zoom_on_mean = False, path = None)
+    
+        Creates the data needed for a SPLOM visualization starting from a list of indexes relative to the desired instances to visualize:
+
+        Parameters
+        ----------
+
+        instances_input : list of integers OR single integer value
+            (OPTIONAL) [default = None] If provided, it needs to contain the indexes of the test-set chosen instances.
+            If None all indexes in test set are used. (range(lenTest))
+
+        zoom_on_mean: boolean
+            (OPTIONAL) [default = False] If True sampling of each feature is around its mean value from the set instances_input.
+                         if False sampling goes from min to max of each feature, 
+                         therefore all outliers will be part of the sample ranges.
+
+        Returns
+        -------
+
+        cell_object_dict: python dictionary
+            (ALWAYS) grid position heatmap (key) : python object from class Pdp2DCurves() for heatmap (value)
+
+    get_data_splom(self, instances_input = None, zoom_on_mean = False, path = None)
+    
+        
+        Creates the data needed for a SPLOM visualization starting from a list of indexes relative to the desired instances to visualize:
+
+        Parameters
+        ----------
+
+        instances_input : list of integers OR single integer value
+            (OPTIONAL) [default = None] If provided, it needs to contain the indexes of the test-set chosen instances.
+            If None all indexes in test set are used. (range(lenTest))
+
+        zoom_on_mean: boolean
+            (OPTIONAL) [default = False] If True sampling of each feature is around its mean value from the set instances_input.
+                         if False sampling goes from min to max of each feature, 
+                         therefore all outliers will be part of the sample ranges.
+
+        Returns
+        -------
+
+        cell_object_dict: python dictionary
+            (ALWAYS) grid position heatmap (key) : python object from class Pdp2DCurves() for heatmap (value)
+
+        
+        
+    plot_splom(self, heatmaps_objects, path = None)
+    
+        visualizes a SPLOM of heatmaps that show every possible combination pair of features.
+        This visualization take quite some time, especially when num_feat is great.
+
+        Parameters
+        ----------
+
+        heatmaps_objects: python dictionary or list of dictionaries.
+            (REQUIRED) Data for visualization returned by get_data_splom() or by compute_clusters().
+            If it is a list a splom will be visualized for each cluster.
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically generated.
+
+    
+    plot_multiple(self, columns, local_curves=False, plot_full_curves=False, path=None, rug=False, data=None, compute_clusters=False, n_clusters=None)
+    
+        The visualization help to visualize multiple variables at a time. The variables can either be viewed as broad curves or as clusters with different color. The plots are ranked according of the variance in the prediction for a single board curve or a cluster of curves for a variables, where the variable with the highest variance is plotted first and so on.        
+
+        Parameters
+        ----------
+        
+        columns : list of strings
+            (REQUIRED) List of column names to be plotted.
+
+        local_curves: boolean value
+            (OPTIONAL) [default = True] If True the original instances are displayed as edges, otherwise if False they are displayed as dots.
+
+        plot_full_curves: boolean value
+            (OPTIONAL) [default = False]
+
+        path: string
+            (OPTIONAL) [default = None] Provide here the name of the file if you want to save the visualization in an image.
+            If an empty string is given, the name of the file is automatically computed.
+            
+        rug : boolean value
+            (OPTIONAL) [default = False] Displays a rug plot at the bottom of each plot showing the distribution for a variable.
+            
+        data: pandas.DataFrame
+            (OPTIONAL) dataframe containing only the features values for each instance in the test-set. Only needed when the rugplot needs to be drawn
+            
+        compute_clusters : boolean value
+            (OPTIONAL) Parameter to specify if clusters must be computed for each of the variables for the partial dependence plot.
+            
+        n_clusters : integer value
+            (OPTIONAL) Number of clusters to be computer for each of the variables.
+            
+    plot_binning(xtest, column_bin, model, class_labels, class_label, n_bins=4, top_k=5)
+    
+        The visualization bins one particular variable into a specified number of bins and then draws plots for each of the remaining variables. Every bin as one line per plot. The remaining variables are ranked according to the combined variance of all the lines of the bins and the variable with the maximum variance is plotted first and so on. A different colors is given to each bin. The visualization also displays the histogram for the binned variable. This method should be called without a pdp object.    
+
+        Parameters
+        ----------
+        
+        xtest: pandas.DataFrame
+            (REQUIRED) dataframe containing only the features values for each instance in the test-set. 
+            
+        column_bin : string
+            (REQUIRED) Column on which binning needs to be performed.
+
+        n_bins: integer value
+            (REQUIRED) [default = 4] The number of bins the binning variable must be divided into.
+
+        model: Python object
+            (REQUIRED) Trained classifier as an object with the following properties:
+            The object must have a method predict_proba(X) 
+            which takes a numpy.array of shape (n, num_feat) 
+            as input and returns a numpy.array of shape (n, len(class_array)).
+
+        class_labels: list of strings
+            (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+        class_label: string
+            (REQUIRED) class name of the desired partial dependence.
+            
+        top_k: integer value
+            (OPTIONAL) [deafult = 5] The number of variables to be visualized.
+            
+    get_rank_on_binning(xtest, model, class_labels, class_label, n_bins=3)
+    
+        This method provides a list of variables ordered by the variance they will have if they are binned for a particular number of bins. This method first bins the a variable in specified number of bins and then calculates the total variance for that variable and orders all the variables based on the total variable of each from maximum to minimum.    
+
+        Parameters
+        ----------
+        
+        xtest: pandas.DataFrame
+            (REQUIRED) dataframe containing only the features values for each instance in the test-set. 
+
+        n_bins: integer value
+            (REQUIRED) [default = 3] The number of bins the binning variable must be divided into.
+
+        model: Python object
+            (REQUIRED) Trained classifier as an object with the following properties:
+            The object must have a method predict_proba(X) 
+            which takes a numpy.array of shape (n, num_feat) 
+            as input and returns a numpy.array of shape (n, len(class_array)).
+
+        class_labels: list of strings
+            (REQUIRED) all the classes name in the same order as the predictions returned by predict_proba(X).
+
+        class_label: string
+            (REQUIRED) class name of the desired partial dependence.
+    
+    
+    
+    
