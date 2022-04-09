@@ -118,7 +118,6 @@ Here you can find a first example. The visualization is automatically saved in a
 .. image:: images/full_curves.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 1.4 Clustering 1D partial dependence
@@ -145,7 +144,6 @@ Without customization, plotting the clustering is quite straightforward.
 .. image:: images/clustering.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 1.6 2D partial dependence heatmaps
@@ -164,7 +162,6 @@ In this case we are taking the instance with index 88.
 .. image:: images/single.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 In case you want to visualize the average 2D partial dependence over a set of instances, just provide a list of integers.
@@ -179,7 +176,6 @@ If you want to visualize the average 2D partial dependence across the entire tes
 .. image:: images/heatmap_test.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 1.7 Clustering 2D partial dependence
@@ -201,7 +197,6 @@ It is possible to cluster all the test instances (using the RMSE metric) and to 
 .. image:: images/clust_heats_test.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 1.8 2D partial dependence SPLOMs
@@ -223,7 +218,6 @@ For example for this particular instance, when changing just two features, an in
 .. image:: images/single_splom.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 The SPLOM can give you a hint of average prediction change also over the entire test-set.
@@ -242,7 +236,6 @@ For example there is an enclaved blue area within the heatmap cell for *pH* and 
 .. image:: images/splom_test.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 1.9 Clustering SPLOMs
@@ -269,7 +262,6 @@ To have an overview over the entire set of clusters:
 .. image:: images/cluster_sploms.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 We can now plot the first cluster (cluster with label "#8" in the left top corner of the last viz)
@@ -282,7 +274,6 @@ We can now plot the first cluster (cluster with label "#8" in the left top corne
 .. image:: images/first_cluster_splom.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 The distance matrix is stored, so it is less time consuming to change the number of clusters and plot again.
@@ -295,7 +286,6 @@ The distance matrix is stored, so it is less time consuming to change the number
 .. image:: images/cluster_sploms_49.png
     :width: 1080px
     :align: center
-    :height: 1080px
     :alt: alternate text
 
 
@@ -350,7 +340,6 @@ If you really like to hand yourself matplotlib and be free to customize the visu
 .. image:: images/own_figure.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 
@@ -377,7 +366,6 @@ For example let's compare the Random Forest model we had so far with a Support V
 .. image:: images/SVM.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 
@@ -412,7 +400,6 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 .. image:: images/custom.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 .. code:: python
@@ -424,7 +411,6 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 .. image:: images/RF_five_cell_view.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 .. code:: python
@@ -440,7 +426,6 @@ Anyway if you change the radius with ``curves.set_keogh_radius()``, you will nee
 .. image:: images/SVM_25_all.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
 
 2.6 Highlighting a custom vector
@@ -460,5 +445,4 @@ In case you want to highlight the partial dependence of a particular vector ``cu
 .. image:: images/custom_vect.png
     :width: 1600px
     :align: center
-    :height: 900px
     :alt: alternate text
